@@ -19,6 +19,8 @@
 
 package org.apache.sysds.runtime.instructions.spark;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.function.Function;
 import org.apache.sysds.runtime.compress.CompressedMatrixBlockFactory;
@@ -36,6 +38,7 @@ import org.apache.sysds.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysds.runtime.matrix.operators.Operator;
 
 public class CompressionSPInstruction extends UnarySPInstruction {
+	private static final Log LOG = LogFactory.getLog(CompressionSPInstruction.class.getName());
 
 	private final int _singletonLookupID;
 
@@ -80,6 +83,9 @@ public class CompressionSPInstruction extends UnarySPInstruction {
 		// execute compression
 		JavaPairRDD<MatrixIndexes, MatrixBlock> out = in.mapValues(mappingFunction);
 
+		out.checkpoint();
+		LOG.error(out.mapValues(new SizeFunction()).collect());
+
 		// set outputs
 		sec.setRDDHandleForVariable(output.getName(), out);
 		sec.addLineageRDD(input1.getName(), output.getName());
@@ -108,6 +114,19 @@ public class CompressionSPInstruction extends UnarySPInstruction {
 			ICostEstimate a = costBuilder.create(arg0.getNumRows(), arg0.getNumColumns());
 			return CompressedMatrixBlockFactory.compress(arg0, InfrastructureAnalyzer.getLocalParallelism(), a)
 				.getLeft();
+		}
+	}
+
+	public static class SizeFunction implements Function<MatrixBlock, Double> {
+		private static final long serialVersionUID= 1L;
+		
+		public SizeFunction(){
+
+		}
+
+		@Override
+		public Double call(MatrixBlock arg0) throws Exception {
+			return (double) arg0.getInMemorySize();
 		}
 	}
 }

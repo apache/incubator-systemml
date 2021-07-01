@@ -2846,28 +2846,23 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		}
 		else //DENSE <- DENSE
 		{
-			try{
-				//allocate dense output block
-				ret.allocateDenseBlock(false);
-				DenseBlock da = getDenseBlock();
-				DenseBlock dc = ret.getDenseBlock();
-				
-				//unary op, incl nnz maintenance
-				long nnz = 0;
-				for( int bi=0; bi<da.numBlocks(); bi++ ) {
-					double[] a = da.valuesAt(bi);
-					double[] c = dc.valuesAt(bi);
-					int len = da.size(bi);
-					for( int i=0; i<len; i++ ) {
-						c[i] = op.fn.execute(a[i]);
-						nnz += (c[i] != 0) ? 1 : 0;
-					}
+			//allocate dense output block
+			ret.allocateDenseBlock(false);
+			DenseBlock da = getDenseBlock();
+			DenseBlock dc = ret.getDenseBlock();
+			
+			//unary op, incl nnz maintenance
+			long nnz = 0;
+			for( int bi=0; bi<da.numBlocks(); bi++ ) {
+				double[] a = da.valuesAt(bi);
+				double[] c = dc.valuesAt(bi);
+				int len = da.size(bi);
+				for( int i=0; i<len; i++ ) {
+					c[i] = op.fn.execute(a[i]);
+					nnz += (c[i] != 0) ? 1 : 0;
 				}
-				ret.nonZeros = nnz;
 			}
-			catch(Exception e){
-				throw new DMLRuntimeException("failed UnaryOperations with inputs: " + ret);
-			}
+			ret.nonZeros = nnz;
 		}
 	}
 

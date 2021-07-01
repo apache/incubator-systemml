@@ -83,8 +83,9 @@ public class CompressionSPInstruction extends UnarySPInstruction {
 		// execute compression
 		JavaPairRDD<MatrixIndexes, MatrixBlock> out = in.mapValues(mappingFunction);
 
-		out.checkpoint();
-		LOG.error(out.mapValues(new SizeFunction()).collect());
+		// out.checkpoint();
+		LOG.error("Compressed: " + out.mapValues(new SizeFunction()).collect());
+		LOG.error("InSizes: " + in.mapValues(new SizeFunction()).collect());
 
 		// set outputs
 		sec.setRDDHandleForVariable(output.getName(), out);

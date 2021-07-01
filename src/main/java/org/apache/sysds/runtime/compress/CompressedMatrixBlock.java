@@ -149,6 +149,37 @@ public class CompressedMatrixBlock extends MatrixBlock {
 		nonZeros = -1;
 	}
 
+		
+	@Override
+	public void reset() {
+		throw new DMLCompressionException();
+	}
+	
+	@Override
+	public void reset(int rl, int cl) {
+		throw new DMLCompressionException();
+	}
+	
+	@Override
+	public void reset(int rl, int cl, long estnnz) {
+		throw new DMLCompressionException();
+	}
+	
+	@Override
+	public void reset(int rl, int cl, boolean sp) {
+		throw new DMLCompressionException();
+	}
+	
+	@Override
+	public void reset(int rl, int cl, boolean sp, long estnnz) {
+		throw new DMLCompressionException();
+	}
+	
+	@Override
+	public void reset(int rl, int cl, double val) {
+		throw new DMLCompressionException();
+	}
+
 	/**
 	 * "Copy" constructor to populate this compressed block with the uncompressed metadata contents of a conventional
 	 * block. Does not compress the block.

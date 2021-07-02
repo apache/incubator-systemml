@@ -127,6 +127,12 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	 */
 	protected SoftReference<MatrixBlock> decompressedVersion;
 
+	public CompressedMatrixBlock(){
+		super(true);
+		sparse = false;
+		nonZeros = -1;
+	}
+
 	/**
 	 * Main constructor for building a block from scratch.
 	 * 

@@ -69,10 +69,10 @@ public class CompressionCPInstruction extends ComputationCPInstruction {
 		// Compress the matrix block
 		Pair<MatrixBlock, CompressionStatistics> compResult = CompressedMatrixBlockFactory.compress(in, OptimizerUtils.getConstrainedNumThreads(-1), root);
 
-		LOG.error(compResult.getRight());
+		if(LOG.isDebugEnabled())
+			LOG.debug(compResult.getRight());
 		MatrixBlock out = compResult.getLeft();
-		LOG.error("Compressed Size: " + out.getInMemorySize());
-
+		
 		m.removeKey(_singletonLookupID);
 		// Set output and release input
 		ec.releaseMatrixInput(input1.getName());

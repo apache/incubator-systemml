@@ -115,6 +115,7 @@ import org.apache.sysds.utils.NativeHelper;
 
 
 public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizable {
+	// private static final Log LOG = LogFactory.getLog(MatrixBlock.class.getName());
 	
 	private static final long serialVersionUID = 7319972089143154056L;
 	
@@ -151,7 +152,6 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 	////////
 	// Matrix Constructors
 	//
-	
 	public MatrixBlock() {
 		this(0, 0, true, -1);
 	}
@@ -214,6 +214,11 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		clen = cl;
 		sparse = false;
 		denseBlock = dBlock;
+	}
+
+
+	protected MatrixBlock(boolean empty){
+		// do nothing
 	}
 
 	////////
@@ -495,20 +500,20 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		return new MatrixCharacteristics(rlen, clen, -1, nonZeros);
 	}
 	
-	public boolean isVector() {
+	public final boolean isVector() {
 		return (rlen == 1 || clen == 1);
 	}
 	
-	public long getLength() {
+	public final long getLength() {
 		return (long)rlen * clen;
 	}
 	
 	@Override
-	public boolean isEmpty() {
+	public final boolean isEmpty() {
 		return isEmptyBlock(false);
 	}
 	
-	public boolean isEmptyBlock() {
+	public final boolean isEmptyBlock() {
 		return isEmptyBlock(true);
 	}
 	
@@ -4730,6 +4735,15 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		return covobj;
 	}
 
+
+	public final MatrixBlock sortOperations(){
+		return sortOperations(null, null);
+	}
+
+	public final MatrixBlock sortOperations(MatrixValue weights){
+		return sortOperations(weights, null);
+	}
+
 	public MatrixBlock sortOperations(MatrixValue weights, MatrixBlock result) {
 		boolean wtflag = (weights!=null);
 		
@@ -4857,7 +4871,7 @@ public class MatrixBlock extends MatrixValue implements CacheBlock, Externalizab
 		return pickValue(0.5, sum_wt%2==0);
 	}
 	
-	public double pickValue(double quantile){
+	public final double pickValue(double quantile){
 		return pickValue(quantile, false);
 	}
 	

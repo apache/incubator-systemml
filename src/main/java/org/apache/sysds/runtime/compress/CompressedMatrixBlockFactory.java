@@ -187,7 +187,7 @@ public class CompressedMatrixBlockFactory {
 		_stats.denseSize = MatrixBlock.estimateSizeInMemory(mb.getNumRows(), mb.getNumColumns(), 1.0);
 		_stats.originalSize = mb.getInMemorySize();
 
-		res = new CompressedMatrixBlock(mb); // copy metadata.
+		res = new CompressedMatrixBlock(mb.getNumRows(), mb.getNumColumns()); // copy metadata.
 		classifyPhase();
 		if(coCodeColGroups == null)
 			return abortCompression();

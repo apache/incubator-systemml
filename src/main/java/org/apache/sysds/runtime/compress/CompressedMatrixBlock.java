@@ -50,8 +50,6 @@ import org.apache.sysds.lops.MapMultChain.ChainType;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.compress.colgroup.AColGroup;
 import org.apache.sysds.runtime.compress.colgroup.AColGroup.CompressionType;
-import org.apache.sysds.runtime.compress.colgroup.ColGroupCompressed;
-import org.apache.sysds.runtime.compress.colgroup.ColGroupConst;
 import org.apache.sysds.runtime.compress.colgroup.ColGroupEmpty;
 import org.apache.sysds.runtime.compress.colgroup.ColGroupIO;
 import org.apache.sysds.runtime.compress.colgroup.ColGroupUncompressed;
@@ -105,7 +103,6 @@ import org.apache.sysds.runtime.matrix.operators.TernaryOperator;
 import org.apache.sysds.runtime.matrix.operators.UnaryOperator;
 import org.apache.sysds.runtime.util.CommonThreadPool;
 import org.apache.sysds.runtime.util.IndexRange;
-import org.apache.sysds.runtime.util.SortUtils;
 import org.apache.sysds.utils.DMLCompressionStatistics;
 
 public class CompressedMatrixBlock extends MatrixBlock {
@@ -131,15 +128,6 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	protected SoftReference<MatrixBlock> decompressedVersion;
 
 	/**
-	 * Constructor for building an empty Compressed Matrix block object.
-	 * 
-	 * OBS! Only to be used for serialization.
-	 */
-	public CompressedMatrixBlock() {
-		super();
-	}
-
-	/**
 	 * Main constructor for building a block from scratch.
 	 * 
 	 * Use with caution, since it constructs an empty matrix block with nothing inside.
@@ -148,33 +136,23 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	 * @param cl number of columns
 	 */
 	public CompressedMatrixBlock(int rl, int cl) {
-		super(rl, cl, true);
-		sparseBlock = null;
-		denseBlock = null;
+		super(true);
+		rlen = rl;
+		clen = cl;
+		sparse = false;
 		nonZeros = -1;
+	}
+
+	public CompressedMatrixBlock(CompressedMatrixBlock that) {
+		super(true);
+		rlen = that.getNumRows();
+		clen = that.getNumColumns();
+		this.copyCompressedMatrix(that);
 	}
 
 	@Override
 	public void reset(int rl, int cl, boolean sp, long estnnz, double val) {
 		throw new DMLCompressionException("Invalid to reset a Compressed MatrixBlock");
-	}
-
-	/**
-	 * "Copy" constructor to populate this compressed block with the uncompressed metadata contents of a conventional
-	 * block. Does not compress the block.
-	 * 
-	 * @param that matrix block
-	 */
-	protected CompressedMatrixBlock(MatrixBlock that) {
-		super(that.getNumRows(), that.getNumColumns(), true);
-		sparseBlock = null;
-		denseBlock = null;
-		nonZeros = that.getNonZeros();
-	}
-
-	public CompressedMatrixBlock(CompressedMatrixBlock that) {
-		super(that.getNumRows(), that.getNumColumns(), true);
-		this.copyCompressedMatrix(that);
 	}
 
 	public boolean isSingleUncompressedGroup() {
@@ -211,13 +189,16 @@ public class CompressedMatrixBlock extends MatrixBlock {
 
 		Timing time = new Timing(true);
 
-		if(decompressedVersion != null && decompressedVersion.get() != null) {
-			if(DMLScript.STATISTICS || LOG.isDebugEnabled()) {
-				double t = time.stop();
-				LOG.debug("decompressed block was in soft reference.");
-				DMLCompressionStatistics.addDecompressTime(t, 1);
+		if(decompressedVersion != null) {
+			MatrixBlock mb = decompressedVersion.get();
+			if(mb != null) {
+				if(DMLScript.STATISTICS || LOG.isDebugEnabled()) {
+					double t = time.stop();
+					LOG.debug("decompressed block was in soft reference.");
+					DMLCompressionStatistics.addDecompressTime(t, 1);
+				}
+				return mb;
 			}
-			return decompressedVersion.get();
 		}
 
 		long nnz = getNonZeros() == -1 ? recomputeNonZeros() : nonZeros;
@@ -272,14 +253,16 @@ public class CompressedMatrixBlock extends MatrixBlock {
 			return decompress();
 
 		Timing time = new Timing(true);
-
-		if(decompressedVersion != null && decompressedVersion.get() != null) {
-			if(DMLScript.STATISTICS || LOG.isDebugEnabled()) {
-				double t = time.stop();
-				LOG.debug("decompressed block was in soft reference.");
-				DMLCompressionStatistics.addDecompressTime(t, k);
+		if(decompressedVersion != null) {
+			MatrixBlock mb = decompressedVersion.get();
+			if(mb != null) {
+				if(DMLScript.STATISTICS || LOG.isDebugEnabled()) {
+					double t = time.stop();
+					LOG.debug("decompressed block was in soft reference.");
+					DMLCompressionStatistics.addDecompressTime(t, k);
+				}
+				return mb;
 			}
-			return decompressedVersion.get();
 		}
 
 		MatrixBlock ret = getUncompressedColGroupAndRemoveFromListOfColGroups();
@@ -288,6 +271,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 		else if(ret == null)
 			ret = new MatrixBlock(rlen, clen, false, -1);
 		ret.allocateDenseBlock();
+
 		decompress(ret, k);
 
 		ret.examSparsity();
@@ -527,7 +511,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	}
 
 	@Override
-	public MatrixBlock append( MatrixBlock[] that, MatrixBlock ret, boolean cbind ) {
+	public MatrixBlock append(MatrixBlock[] that, MatrixBlock ret, boolean cbind) {
 		throw new NotImplementedException();
 	}
 
@@ -1096,59 +1080,22 @@ public class CompressedMatrixBlock extends MatrixBlock {
 
 	@Override
 	public CM_COV_Object covOperations(COVOperator op, MatrixBlock that) {
-		printDecompressWarning("covOperations");
-		MatrixBlock left = getUncompressed();
 		MatrixBlock right = getUncompressed(that);
-		return left.covOperations(op, right);
+		return getUncompressed("covOperations").covOperations(op, right);
 	}
 
 	@Override
 	public CM_COV_Object covOperations(COVOperator op, MatrixBlock that, MatrixBlock weights) {
-		printDecompressWarning("covOperations");
-		MatrixBlock left = getUncompressed();
 		MatrixBlock right1 = getUncompressed(that);
 		MatrixBlock right2 = getUncompressed(weights);
-		return left.covOperations(op, right1, right2);
+		return getUncompressed("covOperations").covOperations(op, right1, right2);
 	}
 
 	@Override
 	public MatrixBlock sortOperations(MatrixValue weights, MatrixBlock result) {
 		MatrixBlock right = getUncompressed(weights);
-		if(_colGroups.size() == 1) {
-			AColGroup grp = _colGroups.get(0);
-			if(grp instanceof ColGroupEmpty || grp instanceof ColGroupConst)
-				return this;
-			printDecompressWarning("sortOperations");
-			if(grp instanceof ColGroupUncompressed)
-				return grp.getValuesAsBlock().sortOperations(right, result);
-
-			if(right == null && grp instanceof ColGroupCompressed) {
-				MatrixBlock vals = grp.getValuesAsBlock();
-				int[] counts = ((ColGroupValue) grp).getCounts();
-				double[] data = (vals.getDenseBlock() != null) ? vals.getDenseBlockValues() : null;
-				SortUtils.sortByValue(0, vals.getNumRows(), data, counts);
-				MatrixBlock counts2 = getCountsAsBlock(counts);
-				if(counts2.isEmpty())
-					return vals;
-				return vals.sortOperations(counts2, result);
-			}
-			else
-				return getUncompressed().sortOperations(right, result);
-		}
-		else {
-			printDecompressWarning("sortOperations with multiple column groups is not supported");
-			return getUncompressed().sortOperations(weights, result);
-		}
+		return getUncompressed("sortOperations").sortOperations(right, result);
 	}
-
-	// @Override
-	// public MatrixBlock aggregateBinaryOperations(MatrixIndexes m1Index, MatrixBlock m1Value, MatrixIndexes m2Index,
-	// MatrixBlock m2Value, MatrixBlock result, AggregateBinaryOperator op) {
-	// if(m2Value == this )
-	// return m2Value.aggregateBinaryOperations(m1Value, m2Value, op);
-	// else
-	// return m1Value.aggregateBinaryOperations(m1Value, m2Value, op);
-	// }
 
 	@Override
 	public MatrixBlock aggregateTernaryOperations(MatrixBlock m1, MatrixBlock m2, MatrixBlock m3, MatrixBlock ret,
@@ -1225,7 +1172,8 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	}
 
 	@Override
-	public MatrixBlock ctableSeqOperations(MatrixValue thatMatrix, double thatScalar, MatrixBlock resultBlock, boolean updateClen) {
+	public MatrixBlock ctableSeqOperations(MatrixValue thatMatrix, double thatScalar, MatrixBlock resultBlock,
+		boolean updateClen) {
 		printDecompressWarning("ctableOperations Var 5");
 		MatrixBlock left = getUncompressed();
 		MatrixBlock right = getUncompressed(thatMatrix);
@@ -1235,8 +1183,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	@Override
 	public void ctableOperations(Operator op, MatrixValue that, MatrixValue that2, CTableMap resultMap,
 		MatrixBlock resultBlock) {
-		printDecompressWarning("ctableOperations Var 7");
-		MatrixBlock left = getUncompressed();
+		MatrixBlock left = getUncompressed("ctableOperations Var 7");
 		MatrixBlock right1 = getUncompressed(that);
 		MatrixBlock right2 = getUncompressed(that2);
 		left.ctableOperations(op, right1, right2, resultMap, resultBlock);
@@ -1244,8 +1191,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 
 	@Override
 	public MatrixBlock ternaryOperations(TernaryOperator op, MatrixBlock m2, MatrixBlock m3, MatrixBlock ret) {
-		printDecompressWarning("ternaryOperations  " + op.fn);
-		MatrixBlock left = getUncompressed();
+		MatrixBlock left = getUncompressed("ternaryOperations  " + op.fn);
 		MatrixBlock right1 = getUncompressed(m2);
 		MatrixBlock right2 = getUncompressed(m3);
 		return left.ternaryOperations(op, right1, right2, ret);
@@ -1254,8 +1200,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	@Override
 	public MatrixBlock quaternaryOperations(QuaternaryOperator qop, MatrixBlock um, MatrixBlock vm, MatrixBlock wm,
 		MatrixBlock out, int k) {
-		printDecompressWarning("quaternaryOperations");
-		MatrixBlock left = getUncompressed();
+		MatrixBlock left = getUncompressed("quaternaryOperations");
 		MatrixBlock right1 = getUncompressed(um);
 		MatrixBlock right2 = getUncompressed(vm);
 		MatrixBlock right3 = getUncompressed(wm);
@@ -1285,7 +1230,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	}
 
 	private static boolean isCompressed(MatrixBlock mb) {
-		return(mb instanceof CompressedMatrixBlock);
+		return mb instanceof CompressedMatrixBlock;
 	}
 
 	public static MatrixBlock getUncompressed(MatrixValue mVal) {
@@ -1294,15 +1239,19 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	}
 
 	public MatrixBlock getUncompressed() {
-		return isCompressed((MatrixBlock) this) ? ((CompressedMatrixBlock) this)
-			.decompress(OptimizerUtils.getConstrainedNumThreads(-1)) : (MatrixBlock) this;
+		return this.decompress(OptimizerUtils.getConstrainedNumThreads(-1));
 	}
 
-	protected void printDecompressWarning(String operation) {
+	private MatrixBlock getUncompressed(String operation) {
+		printDecompressWarning(operation);
+		return getUncompressed();
+	}
+
+	private void printDecompressWarning(String operation) {
 		LOG.warn("Operation '" + operation + "' not supported yet - decompressing for ULA operations.");
 	}
 
-	protected void printDecompressWarning(String operation, MatrixBlock m2) {
+	private void printDecompressWarning(String operation, MatrixBlock m2) {
 		if(isCompressed(m2))
 			LOG.warn("Operation '" + operation + "' not supported yet - decompressing for ULA operations.");
 		else
@@ -1521,34 +1470,34 @@ public class CompressedMatrixBlock extends MatrixBlock {
 		// do nothing
 	}
 
-	@Override 
-	public void dropLastRowsOrColumns(CorrectionLocationType correctionLocation){
-		throw new NotImplementedException();
-	}
-
-	@Override 
-	public double interQuartileMean() {
+	@Override
+	public void dropLastRowsOrColumns(CorrectionLocationType correctionLocation) {
 		throw new NotImplementedException();
 	}
 
 	@Override
-	public MatrixBlock pickValues(MatrixValue quantiles, MatrixValue ret){
-		throw new NotImplementedException();
+	public double interQuartileMean() {
+		return getUncompressed("interQuartileMean").interQuartileMean();
+	}
+
+	@Override
+	public MatrixBlock pickValues(MatrixValue quantiles, MatrixValue ret) {
+		return getUncompressed("pickValues").pickValues(quantiles, ret);
 	}
 
 	@Override
 	public double pickValue(double quantile, boolean average) {
-		throw new NotImplementedException();
+		return getUncompressed("pickValue").pickValue(quantile, average);
 	}
 
 	@Override
 	public double sumWeightForQuantile() {
-		throw new NotImplementedException();
+		return getUncompressed("sumWeightForQuantile").sumWeightForQuantile();
 	}
 
-	@Override 
+	@Override
 	public MatrixBlock extractTriangular(MatrixBlock ret, boolean lower, boolean diag, boolean values) {
-		throw new NotImplementedException();
+		return getUncompressed("extractTriangular").extractTriangular(ret, lower, diag, values);
 	}
 
 	@Override
@@ -1556,7 +1505,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 		return false;
 	}
 
-	@Override 
+	@Override
 	public void checkNaN() {
 		throw new NotImplementedException();
 	}
@@ -1580,19 +1529,19 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	public Future<MatrixBlock> allocateBlockAsync() {
 		throw new DMLCompressionException("Invalid to allocate dense block on a compressed MatrixBlock");
 	}
-	
+
 	@Override
 	public boolean allocateDenseBlock(boolean clearNNZ) {
 		throw new DMLCompressionException("Invalid to allocate dense block on a compressed MatrixBlock");
 	}
 
-	@Override 
+	@Override
 	public boolean allocateSparseRowsBlock(boolean clearNNZ) {
 		throw new DMLCompressionException("Invalid to allocate sparse block on a compressed MatrixBlock");
 	}
 
 	@Override
-	public void allocateAndResetSparseBlock(boolean clearNNZ, SparseBlock.Type stype){
+	public void allocateAndResetSparseBlock(boolean clearNNZ, SparseBlock.Type stype) {
 		throw new DMLCompressionException("Invalid to allocate block on a compressed MatrixBlock");
 	}
 }

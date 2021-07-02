@@ -70,9 +70,7 @@ public abstract class CompressBase extends AutomatedTestBase {
 
 			LOG.debug(runTest(null));
 
-			int decompressCount = 0;
-			decompressCount += DMLCompressionStatistics.getDecompressionCount();
-			decompressCount += DMLCompressionStatistics.getDecompressionSTCount();
+			int decompressCount = DMLCompressionStatistics.getDecompressionCount();
 			long compressionCount = (instType == ExecType.SPARK) ? Statistics
 				.getCPHeavyHitterCount("sp_compress") : Statistics.getCPHeavyHitterCount("compress");
 			DMLCompressionStatistics.reset();

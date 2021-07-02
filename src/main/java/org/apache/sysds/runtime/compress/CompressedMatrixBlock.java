@@ -199,9 +199,8 @@ public class CompressedMatrixBlock extends MatrixBlock {
 			MatrixBlock mb = decompressedVersion.get();
 			if(mb != null) {
 				if(DMLScript.STATISTICS || LOG.isDebugEnabled()) {
-					double t = time.stop();
 					LOG.debug("decompressed block was in soft reference.");
-					DMLCompressionStatistics.addDecompressTime(t, 1);
+					DMLCompressionStatistics.addDecompressCacheCount();
 				}
 				return mb;
 			}
@@ -263,9 +262,8 @@ public class CompressedMatrixBlock extends MatrixBlock {
 			MatrixBlock mb = decompressedVersion.get();
 			if(mb != null) {
 				if(DMLScript.STATISTICS || LOG.isDebugEnabled()) {
-					double t = time.stop();
 					LOG.debug("decompressed block was in soft reference.");
-					DMLCompressionStatistics.addDecompressTime(t, k);
+					DMLCompressionStatistics.addDecompressCacheCount();
 				}
 				return mb;
 			}

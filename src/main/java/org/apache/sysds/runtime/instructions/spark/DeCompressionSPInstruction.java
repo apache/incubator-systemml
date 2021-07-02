@@ -31,6 +31,7 @@ import org.apache.sysds.runtime.instructions.spark.CompressionSPInstruction.Comp
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysds.runtime.matrix.operators.Operator;
+import org.apache.sysds.utils.DMLCompressionStatistics;
 
 public class DeCompressionSPInstruction extends UnarySPInstruction {
 
@@ -54,6 +55,9 @@ public class DeCompressionSPInstruction extends UnarySPInstruction {
 		// execute compression
 		JavaPairRDD<MatrixIndexes, MatrixBlock> out = in.mapValues(new CompressionFunction());
 
+		
+
+		DMLCompressionStatistics.addDecompressSparkCount();
 		// set outputs
 		sec.setRDDHandleForVariable(output.getName(), out);
 		sec.addLineageRDD(input1.getName(), output.getName());

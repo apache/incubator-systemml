@@ -94,7 +94,7 @@ public class CompressedSizeEstimatorSample extends CompressedSizeEstimator {
 	public CompressedSizeInfoColGroup estimateCompressedColGroupSize(int[] colIndexes, int nrUniqueUpperBound) {
 
 		// extract statistics from sample
-		final ABitmap ubm = BitmapEncoder.extractBitmap(colIndexes, _sample, _transposed);
+		final ABitmap ubm = BitmapEncoder.extractBitmap(colIndexes, _sample, _transposed, nrUniqueUpperBound / 2);
 		final EstimationFactors sampleFacts = EstimationFactors.computeSizeEstimationFactors(ubm, false, colIndexes);
 		final AMapToData map = MapToFactory.create(ubm);
 

@@ -188,6 +188,7 @@ public class CompressedMatrixBlockFactory {
 		_stats.originalSize = mb.getInMemorySize();
 
 		res = new CompressedMatrixBlock(mb.getNumRows(), mb.getNumColumns()); // copy metadata.
+		res.setNonZeros(mb.getNonZeros());
 		classifyPhase();
 		if(coCodeColGroups == null)
 			return abortCompression();
@@ -198,8 +199,12 @@ public class CompressedMatrixBlockFactory {
 
 		if(res == null)
 			return abortCompression();
-
-		res.recomputeNonZeros();
+		final long oldNNZ = mb.getNonZeros();
+		if(oldNNZ != -1 && oldNNZ != 0)
+			res.setNonZeros(oldNNZ);
+		else
+			res.recomputeNonZeros();
+			
 		return new ImmutablePair<>(res, _stats);
 	}
 

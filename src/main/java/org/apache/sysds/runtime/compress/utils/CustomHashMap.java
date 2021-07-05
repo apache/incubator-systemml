@@ -18,6 +18,9 @@
  */
 package org.apache.sysds.runtime.compress.utils;
 
+import java.util.Comparator;
+import java.util.List;
+
 import org.apache.sysds.runtime.DMLRuntimeException;
 
 /**
@@ -27,8 +30,11 @@ public abstract class CustomHashMap {
 	protected static final int INIT_CAPACITY = 8;
 	protected static final int RESIZE_FACTOR = 2;
 	protected static final float LOAD_FACTOR = 0.50f;
+	public static int hashMissCount = 0;
 
 	protected int _size = -1;
+
+	protected DArrayIListEntry[] _data = null;
 
 	public int size() {
 		return _size;
@@ -60,5 +66,110 @@ public abstract class CustomHashMap {
 
 	public CustomHashMap joinHashMap(CustomHashMap that) {
 		return this;
+	}
+
+	public abstract List<DArrayIListEntry> extractValues();
+
+	protected static int hash(DblArray key) {
+		int h = key.hashCode();
+
+		// This function ensures that hashCodes that differ only by
+		// constant multiples at each bit position have a bounded
+		// number of collisions (approximately 8 at default load factor).
+		h ^= (h >>> 20) ^ (h >>> 12);
+		return h ^ (h >>> 7) ^ (h >>> 4);
+	}
+
+	protected static int indexFor(int h, int length) {
+		return h & (length - 1);
+	}
+
+
+	public class DArrayIListEntry implements Comparator<DArrayIListEntry>, Comparable<DArrayIListEntry> {
+		public DblArray key;
+		public IntArrayList value;
+		public DArrayIListEntry next;
+
+		public DArrayIListEntry(DblArray ekey, IntArrayList evalue) {
+			key = ekey;
+			value = evalue;
+			next = null;
+		}
+
+		@Override
+		public int compare(DArrayIListEntry o1, DArrayIListEntry o2) {
+			double[] o1d = o1.key.getData();
+			double[] o2d = o2.key.getData();
+			for(int i = 0; i < o1d.length && i < o2d.length; i++) {
+				if(o1d[i] > o2d[i]) {
+					return 1;
+				}
+				else if(o1d[i] < o2d[i]) {
+					return -1;
+				}
+			}
+			if(o1d.length == o2d.length) {
+				return 0;
+			}
+			else if(o1d.length > o2d.length) {
+				return 1;
+			}
+			else {
+				return -1;
+			}
+		}
+
+		@Override
+		public int compareTo(DArrayIListEntry o) {
+			return compare(this, o);
+		}
+
+		@Override
+		public String toString() {
+			if(next == null) {
+				return key + ":" + value;
+			}
+			else {
+				return key + ":" + value + "," + next;
+			}
+		}
+
+		public boolean keyEquals(DblArray keyThat) {
+			return key.equals(keyThat);
+		}
+
+		protected IntArrayList getIntArrayList(DblArray keyThat) {
+			if(keyThat.hashCode() == key.hashCode() && key == keyThat) {
+				return value;
+			}
+			else if(next == null) {
+				IntArrayList lstPtr = new IntArrayList();
+				// Swap to place the new value, in front.
+				next = new DArrayIListEntry(key, lstPtr);
+				_size++;
+				return lstPtr;
+			}
+			hashMissCount++;
+			return next.getIntArrayList(keyThat);
+		}
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append(this.getClass().getSimpleName() + this.hashCode());
+		sb.append("   " + _size);
+		for(int i = 0; i < _data.length; i++) {
+			DArrayIListEntry ent = _data[i];
+			if(ent != null) {
+
+				sb.append("\n");
+				sb.append("id:" + i);
+				sb.append("[");
+				sb.append(ent);
+				sb.append("]");
+			}
+		}
+		return sb.toString();
 	}
 }

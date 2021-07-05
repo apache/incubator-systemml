@@ -281,7 +281,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 		ret.examSparsity();
 		if(DMLScript.STATISTICS || LOG.isDebugEnabled()) {
 			double t = time.stop();
-			LOG.debug("decompressed block w/ k=" + k + " in " + time.stop() + "ms.");
+			LOG.debug("decompressed block w/ k=" + k + " in " + t + "ms.");
 			DMLCompressionStatistics.addDecompressTime(t, k);
 		}
 

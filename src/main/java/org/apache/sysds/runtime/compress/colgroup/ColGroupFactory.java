@@ -83,7 +83,7 @@ public final class ColGroupFactory {
 		CompressionSettings compSettings) {
 		List<AColGroup> ret = new ArrayList<>(csi.getNumberColGroups());
 		for(CompressedSizeInfoColGroup g : csi.getInfo())
-			ret.addAll(compressColGroup(in, g.getColumns(), compSettings));
+			ret.addAll(compressColGroup(in, g.getColumns(), compSettings, g.getNumVals()));
 		return ret;
 	}
 
@@ -93,7 +93,7 @@ public final class ColGroupFactory {
 			ExecutorService pool = CommonThreadPool.get(k);
 			List<CompressTask> tasks = new ArrayList<>();
 			for(CompressedSizeInfoColGroup g : csi.getInfo())
-				tasks.add(new CompressTask(in, g.getColumns(), compSettings));
+				tasks.add(new CompressTask(in, g.getColumns(), compSettings, g.getNumVals()));
 
 			List<AColGroup> ret = new ArrayList<>(csi.getNumberColGroups());
 			for(Future<Collection<AColGroup>> t : pool.invokeAll(tasks))
@@ -140,21 +140,24 @@ public final class ColGroupFactory {
 		private final MatrixBlock _in;
 		private final int[] _colIndexes;
 		private final CompressionSettings _compSettings;
+		private final int _nrUniqueEstimate;
 
-		protected CompressTask(MatrixBlock in, int[] colIndexes, CompressionSettings compSettings) {
+		protected CompressTask(MatrixBlock in, int[] colIndexes, CompressionSettings compSettings,
+			int nrUniqueEstimate) {
 			_in = in;
 			_colIndexes = colIndexes;
 			_compSettings = compSettings;
+			_nrUniqueEstimate = nrUniqueEstimate;
 		}
 
 		@Override
 		public Collection<AColGroup> call() {
-			return compressColGroup(_in, _colIndexes, _compSettings);
+			return compressColGroup(_in, _colIndexes, _compSettings, _nrUniqueEstimate);
 		}
 	}
 
 	private static Collection<AColGroup> compressColGroup(MatrixBlock in, int[] colIndexes,
-		CompressionSettings compSettings) {
+		CompressionSettings compSettings, int nrUniqueEstimate) {
 		if(in.isEmpty())
 			return Collections.singletonList(
 				new ColGroupEmpty(colIndexes, compSettings.transposed ? in.getNumColumns() : in.getNumRows()));
@@ -162,16 +165,16 @@ public final class ColGroupFactory {
 			final SparseBlock sb = in.getSparseBlock();
 			for(int col : colIndexes)
 				if(sb.isEmpty(col))
-					return compressColGroupAndExtractEmptyColumns(in, colIndexes, compSettings);
-			return Collections.singletonList(compressColGroupForced(in, colIndexes, compSettings));
+					return compressColGroupAndExtractEmptyColumns(in, colIndexes, compSettings, nrUniqueEstimate);
+			return Collections.singletonList(compressColGroupForced(in, colIndexes, compSettings, nrUniqueEstimate));
 		}
 		else
-			return Collections.singletonList(compressColGroupForced(in, colIndexes, compSettings));
+			return Collections.singletonList(compressColGroupForced(in, colIndexes, compSettings, nrUniqueEstimate));
 
 	}
 
 	private static Collection<AColGroup> compressColGroupAndExtractEmptyColumns(MatrixBlock in, int[] colIndexes,
-		CompressionSettings compSettings) {
+		CompressionSettings compSettings, int nrUniqueEstimate) {
 		final IntArrayList e = new IntArrayList();
 		final IntArrayList v = new IntArrayList();
 		final SparseBlock sb = in.getSparseBlock();
@@ -181,9 +184,9 @@ public final class ColGroupFactory {
 			else
 				v.appendValue(col);
 		}
-		AColGroup empty = compressColGroupForced(in, e.extractValues(true), compSettings);
+		AColGroup empty = compressColGroupForced(in, e.extractValues(true), compSettings, nrUniqueEstimate);
 		if(v.size() > 0) {
-			AColGroup colGroup = compressColGroupForced(in, v.extractValues(true), compSettings);
+			AColGroup colGroup = compressColGroupForced(in, v.extractValues(true), compSettings, nrUniqueEstimate);
 			return Arrays.asList(empty, colGroup);
 		}
 		else {
@@ -191,22 +194,22 @@ public final class ColGroupFactory {
 		}
 	}
 
-	private static AColGroup compressColGroupForced(MatrixBlock in, int[] colIndexes,
-		CompressionSettings compSettings) {
-		ABitmap ubm = BitmapEncoder.extractBitmap(colIndexes, in, compSettings.transposed);
-
-		CompressedSizeEstimator estimator = new CompressedSizeEstimatorExact(in, compSettings);
-
-		CompressedSizeInfoColGroup sizeInfo = new CompressedSizeInfoColGroup(
-			estimator.estimateCompressedColGroupSize(ubm, colIndexes), compSettings.validCompressions, ubm);
-
+	private static AColGroup compressColGroupForced(MatrixBlock in, int[] colIndexes, CompressionSettings compSettings,
+		int nrUniqueEstimate) {
 		try {
+			ABitmap ubm = BitmapEncoder.extractBitmap(colIndexes, in, compSettings.transposed, nrUniqueEstimate);
+
+			CompressedSizeEstimator estimator = new CompressedSizeEstimatorExact(in, compSettings);
+
+			CompressedSizeInfoColGroup sizeInfo = new CompressedSizeInfoColGroup(
+				estimator.estimateCompressedColGroupSize(ubm, colIndexes), compSettings.validCompressions, ubm);
+
 			int numRows = compSettings.transposed ? in.getNumColumns() : in.getNumRows();
 			return compress(colIndexes, numRows, ubm, sizeInfo.getBestCompressionType(compSettings), compSettings, in,
 				sizeInfo.getTupleSparsity());
 		}
 		catch(Exception e) {
-			throw new DMLCompressionException("Error while compressing colgroup based on :\n" + sizeInfo, e);
+			throw new DMLCompressionException("Error while compressing colgroup", e);
 		}
 	}
 
@@ -289,7 +292,7 @@ public final class ColGroupFactory {
 		CompressionSettings cs, MatrixBlock rawMatrixBlock, double tupleSparsity) {
 
 		// if(compType == CompressionType.UNCOMPRESSED )
-		// 	compType = CompressionType.DDC;
+		// compType = CompressionType.DDC;
 
 		try {
 			final IntArrayList[] of = ubm.getOffsetList();
@@ -363,7 +366,17 @@ public final class ColGroupFactory {
 			int[] _indexes = s.getIndexes();
 			AMapToData _data = s.getData();
 
-			return new ColGroupSDCZeros(colIndexes, numRows, dict, _indexes, _data);
+			ColGroupValue ret = new ColGroupSDCZeros(colIndexes, numRows, dict, _indexes, _data);
+			int[] counts = new int[offsets.length + 1];
+			int sum = 0;
+			for(int i = 0; i < offsets.length; i++) {
+				counts[i] = offsets[i].size();
+				sum += counts[i];
+			}
+			counts[offsets.length] = numRows - sum;
+
+			ret.setCounts(counts);
+			return ret;
 		}
 		catch(Exception e) {
 			throw new DMLCompressionException(
@@ -380,13 +393,12 @@ public final class ColGroupFactory {
 			AInsertionSorter s = InsertionSorterFactory.create(numRows, offsets, largestIndex);
 			int[] _indexes = s.getIndexes();
 			AMapToData _data = s.getData();
-			AColGroup ret = new ColGroupSDC(colIndexes, numRows, dict, _indexes, _data);
+			ColGroupValue ret = new ColGroupSDC(colIndexes, numRows, dict, _indexes, _data);
 			return ret;
 		}
 		catch(Exception e) {
 			throw new DMLCompressionException(
-				"Failed to construct SDC Group with columns :\n" + Arrays.toString(colIndexes) + "\nand Bitmap: " + ubm,
-				e);
+				"Failed to construct SDC Group with columns :\n" + Arrays.toString(colIndexes), e);
 		}
 
 	}

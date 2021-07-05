@@ -121,8 +121,8 @@ public class CLALibSquash {
 	}
 
 	private static ABitmap extractBitmap(int[] colIndices, CompressedMatrixBlock compressedBlock) {
-		ABitmap x = BitmapEncoder.extractBitmap(colIndices,
-			ReaderColumnSelection.createCompressedReader(compressedBlock, colIndices), compressedBlock.getNumRows());
+		ABitmap x = BitmapEncoder.extractBitmapMultiColumns(colIndices,
+			ReaderColumnSelection.createCompressedReader(compressedBlock, colIndices), compressedBlock.getNumRows(), 256);
 		return BitmapLossyEncoder.makeBitmapLossy(x, compressedBlock.getNumRows());
 	}
 

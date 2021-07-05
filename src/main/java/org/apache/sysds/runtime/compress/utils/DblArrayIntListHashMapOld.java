@@ -20,7 +20,6 @@
 package org.apache.sysds.runtime.compress.utils;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -30,37 +29,20 @@ import org.apache.commons.logging.LogFactory;
  * cases.
  * 
  */
-public class DblArrayIntListHashMap extends CustomHashMap {
+public class DblArrayIntListHashMapOld extends CustomHashMap {
 
-	protected static final Log LOG = LogFactory.getLog(DblArrayIntListHashMap.class.getName());
+	protected static final Log LOG = LogFactory.getLog(DblArrayIntListHashMapOld.class.getName());
 
-	public DblArrayIntListHashMap() {
+	public static int hashMissCount = 0;
+
+	public DblArrayIntListHashMapOld() {
 		_data = new DArrayIListEntry[INIT_CAPACITY];
 		_size = 0;
 	}
 
-	public DblArrayIntListHashMap(int init_capacity) {
-		_data = new DArrayIListEntry[getPow2(init_capacity)];
+	public DblArrayIntListHashMapOld(int init_capacity) {
+		_data = new DArrayIListEntry[init_capacity];
 		_size = 0;
-	}
-
-	private int getPow2(int x) {
-		x = x - 1;
-		x |= x >> 1;
-		x |= x >> 2;
-		x |= x >> 4;
-		x |= x >> 5;
-		x |= x >> 6;
-		x |= x >> 8;
-		x |= x >> 9;
-		x |= x >> 10;
-		x |= x >> 11;
-		x |= x >> 12;
-		x |= x >> 13;
-		x |= x >> 14;
-		x |= x >> 15;
-		x |= x >> 16;
-		return x + 1;
 	}
 
 	public IntArrayList get(DblArray key) {
@@ -72,31 +54,31 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		int ix = indexFor(hash, _data.length);
 
 		// find entry
+		for(DArrayIListEntry e = _data[ix]; e != null; e = e.next) {
+			if(e.key.equals(key)) {
+				return e.value;
+			}else{
+				hashMissCount++;
+			}
 
-		while(_data[ix] != null && !_data[ix].keyEquals(key)) {
-			hash = Integer.hashCode(hash + 1); // hash of hash
-			ix = indexFor(hash, _data.length);
-			hashMissCount++;
 		}
-		DArrayIListEntry e = _data[ix];
-		if(e != null)
-			return e.value;
+
 		return null;
 	}
 
-	private void appendValue(DblArray key, IntArrayList value) {
+	public void appendValue(DblArray key, IntArrayList value) {
 		// compute entry index position
 		int hash = hash(key);
 		int ix = indexFor(hash, _data.length);
 
 		// add new table entry (constant time)
 		DArrayIListEntry enew = new DArrayIListEntry(key, value);
-		while(_data[ix] != null && !_data[ix].keyEquals(key)) {
-			hash = Integer.hashCode(hash + 1); // hash of hash
-			ix = indexFor(hash, _data.length);
-			hashMissCount++;
-		}
+		enew.next = _data[ix]; // colliding entries / null
 		_data[ix] = enew;
+		if(enew.next != null && enew.next.key == key) {
+			enew.next = enew.next.next;
+			_size--;
+		}
 		_size++;
 
 		// resize if necessary
@@ -104,39 +86,51 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 			resize();
 	}
 
-	public void appendValue(DblArray key, int value) {
+	public void appendValue(DblArray key, int value){
 		int hash = hash(key);
 		int ix = indexFor(hash, _data.length);
-
-		while(_data[ix] != null && !_data[ix].keyEquals(key)) {
-			hash = Integer.hashCode(hash + 1); // hash of hash
-			ix = indexFor(hash, _data.length);
-			hashMissCount++;
-		}
-		DArrayIListEntry e = _data[ix];
-		if(e == null) {
-			final IntArrayList lstPtr = new IntArrayList();
-			lstPtr.appendValue(value);
-			_data[ix] = new DArrayIListEntry(new DblArray(key), lstPtr);
+		IntArrayList lstPtr = null; // The list to add the value to.
+		if(_data[ix] == null) {
+			lstPtr = new IntArrayList();
+			_data[ix] = new DArrayIListEntry(key, lstPtr);
 			_size++;
 		}
 		else {
-			final IntArrayList lstPtr = e.value;
-			lstPtr.appendValue(value);
+			for(DArrayIListEntry e = _data[ix]; e != null; e = e.next) {
+				if(e.key == key) {
+					lstPtr = e.value;
+					break;
+				}
+				else if(e.next == null) {
+					lstPtr = new IntArrayList();
+					// Swap to place the new value, in front.
+					DArrayIListEntry eOld = _data[ix];
+					_data[ix] = new DArrayIListEntry(key, lstPtr);
+					_data[ix].next = eOld;
+					_size++;
+					break;
+				}
+				DblArrayIntListHashMap.hashMissCount++;
+			}
 		}
+		lstPtr.appendValue(value);
 
 		// resize if necessary
 		if(_size >= LOAD_FACTOR * _data.length)
 			resize();
 	}
 
-	public List<DArrayIListEntry> extractValues() {
-		List<DArrayIListEntry> ret = new ArrayList<>();
-
-		for(DArrayIListEntry e : _data)
-			if(e != null)
+	public ArrayList<DArrayIListEntry> extractValues() {
+		ArrayList<DArrayIListEntry> ret = new ArrayList<>();
+		for(DArrayIListEntry e : _data) {
+			if(e != null) {
+				while(e.next != null) {
+					ret.add(e);
+					e = e.next;
+				}
 				ret.add(e);
-
+			}
+		}
 		// Collections.sort(ret);
 		return ret;
 	}
@@ -152,9 +146,33 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		_size = 0;
 
 		// rehash all entries
-		for(DArrayIListEntry e : olddata)
-			if(e != null)
+		for(DArrayIListEntry e : olddata) {
+			if(e != null) {
+				while(e.next != null) {
+					appendValue(e.key, e.value);
+					e = e.next;
+				}
 				appendValue(e.key, e.value);
+			}
+		}
 	}
 
+	@Override
+	public String toString(){
+		StringBuilder sb = new StringBuilder();
+		sb.append(this.getClass().getSimpleName() + this.hashCode());
+		sb.append("   "+  _size);
+		for(int i = 0 ; i < _data.length; i++){
+			DArrayIListEntry ent = _data[i];
+			if(ent != null){
+
+				sb.append("\n");
+				sb.append("id:" + i);
+				sb.append("[");
+				sb.append(ent);
+				sb.append("]");
+			}
+		}
+		return sb.toString();
+	}
 }

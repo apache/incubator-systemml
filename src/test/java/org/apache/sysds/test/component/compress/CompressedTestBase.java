@@ -229,7 +229,7 @@ public abstract class CompressedTestBase extends TestBase {
 							colIndexes[x] = y;
 						}
 						// columns += Arrays.toString(colIndexes);
-						ABitmap ubm = BitmapEncoder.extractBitmap(colIndexes, mb, false);
+						ABitmap ubm = BitmapEncoder.extractBitmap(colIndexes, mb, false, 8);
 
 						EstimationFactors ef = CompressedSizeEstimator.estimateCompressedColGroupSize(ubm, colIndexes,
 							mb.getNumRows(), cs);

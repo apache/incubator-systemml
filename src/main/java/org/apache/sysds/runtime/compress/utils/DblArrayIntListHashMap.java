@@ -20,6 +20,7 @@
 package org.apache.sysds.runtime.compress.utils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
@@ -113,6 +114,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 			ix = indexFor(hash, _data.length);
 			hashMissCount++;
 		}
+
 		DArrayIListEntry e = _data[ix];
 		if(e == null) {
 			final IntArrayList lstPtr = new IntArrayList();
@@ -157,4 +159,21 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 				appendValue(e.key, e.value);
 	}
 
+	public void reset() {
+		Arrays.fill(_data, null);
+	}
+
+	public void resizeTo(int size) {
+		int newSize = getPow2(size);
+		if(newSize > _data.length) {
+			_data = new DArrayIListEntry[newSize];
+		}
+		else {
+			Arrays.fill(_data, null);
+			// only allocate new if the size is smaller than 2x
+			if(size < _data.length / 2)
+				_data = new DArrayIListEntry[newSize];
+
+		}
+	}
 }

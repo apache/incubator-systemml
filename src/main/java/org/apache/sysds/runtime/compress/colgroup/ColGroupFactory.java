@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -48,6 +49,7 @@ import org.apache.sysds.runtime.compress.estim.CompressedSizeInfo;
 import org.apache.sysds.runtime.compress.estim.CompressedSizeInfoColGroup;
 import org.apache.sysds.runtime.compress.lib.BitmapEncoder;
 import org.apache.sysds.runtime.compress.utils.ABitmap;
+import org.apache.sysds.runtime.compress.utils.DblArrayIntListHashMap;
 import org.apache.sysds.runtime.compress.utils.IntArrayList;
 import org.apache.sysds.runtime.data.SparseBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
@@ -83,7 +85,7 @@ public final class ColGroupFactory {
 		CompressionSettings compSettings) {
 		List<AColGroup> ret = new ArrayList<>(csi.getNumberColGroups());
 		for(CompressedSizeInfoColGroup g : csi.getInfo())
-			ret.addAll(compressColGroup(in, g.getColumns(), compSettings, g.getNumVals()));
+			ret.addAll(compressColGroup(in, g.getColumns(), compSettings, g.getNumVals(), null));
 		return ret;
 	}
 
@@ -92,8 +94,11 @@ public final class ColGroupFactory {
 		try {
 			ExecutorService pool = CommonThreadPool.get(k);
 			List<CompressTask> tasks = new ArrayList<>();
-			for(CompressedSizeInfoColGroup g : csi.getInfo())
-				tasks.add(new CompressTask(in, g.getColumns(), compSettings, g.getNumVals()));
+
+			List<List<CompressedSizeInfoColGroup>> threadGroups = makeGroups(csi.getInfo(), k);
+			for(List<CompressedSizeInfoColGroup> tg : threadGroups)
+				if(!tg.isEmpty())
+					tasks.add(new CompressTask(in, tg, compSettings));
 
 			List<AColGroup> ret = new ArrayList<>(csi.getNumberColGroups());
 			for(Future<Collection<AColGroup>> t : pool.invokeAll(tasks))
@@ -105,6 +110,19 @@ public final class ColGroupFactory {
 			// return compressColGroups(in, groups, compSettings);
 			throw new DMLRuntimeException("Failed compression ", e);
 		}
+	}
+
+	private static List<List<CompressedSizeInfoColGroup>> makeGroups(List<CompressedSizeInfoColGroup> groups, int k) {
+		// sort by number of distinct items
+		Collections.sort(groups, Comparator.comparing(g -> -g.getNumVals()));
+		List<List<CompressedSizeInfoColGroup>> ret = new ArrayList<>();
+		for(int i = 0; i < k; i++)
+			ret.add(new ArrayList<>());
+
+		for(int i = 0; i < groups.size(); i++)
+			ret.get(i % k).add(groups.get(i));
+
+		return ret;
 	}
 
 	// private static class CompressedColumn implements Comparable<CompressedColumn>
@@ -138,26 +156,33 @@ public final class ColGroupFactory {
 
 	private static class CompressTask implements Callable<Collection<AColGroup>> {
 		private final MatrixBlock _in;
-		private final int[] _colIndexes;
+		private final List<CompressedSizeInfoColGroup> _groups;
 		private final CompressionSettings _compSettings;
-		private final int _nrUniqueEstimate;
 
-		protected CompressTask(MatrixBlock in, int[] colIndexes, CompressionSettings compSettings,
-			int nrUniqueEstimate) {
+		protected CompressTask(MatrixBlock in, List<CompressedSizeInfoColGroup> groups,
+			CompressionSettings compSettings) {
 			_in = in;
-			_colIndexes = colIndexes;
+			_groups = groups;
 			_compSettings = compSettings;
-			_nrUniqueEstimate = nrUniqueEstimate;
 		}
 
 		@Override
 		public Collection<AColGroup> call() {
-			return compressColGroup(_in, _colIndexes, _compSettings, _nrUniqueEstimate);
+			ArrayList<AColGroup> res = new ArrayList<AColGroup>();
+
+			DblArrayIntListHashMap tmpMap = new DblArrayIntListHashMap(_groups.get(0).getNumVals() * 2);
+			for(CompressedSizeInfoColGroup g : _groups) {
+				tmpMap.resizeTo(g.getNumVals() * 2);
+				res.addAll(compressColGroup(_in, g.getColumns(), _compSettings, g.getNumVals(), tmpMap));
+			}
+
+			return res;
 		}
+
 	}
 
 	private static Collection<AColGroup> compressColGroup(MatrixBlock in, int[] colIndexes,
-		CompressionSettings compSettings, int nrUniqueEstimate) {
+		CompressionSettings compSettings, int nrUniqueEstimate, DblArrayIntListHashMap tmpMap) {
 		if(in.isEmpty())
 			return Collections.singletonList(
 				new ColGroupEmpty(colIndexes, compSettings.transposed ? in.getNumColumns() : in.getNumRows()));
@@ -165,16 +190,19 @@ public final class ColGroupFactory {
 			final SparseBlock sb = in.getSparseBlock();
 			for(int col : colIndexes)
 				if(sb.isEmpty(col))
-					return compressColGroupAndExtractEmptyColumns(in, colIndexes, compSettings, nrUniqueEstimate);
-			return Collections.singletonList(compressColGroupForced(in, colIndexes, compSettings, nrUniqueEstimate));
+					return compressColGroupAndExtractEmptyColumns(in, colIndexes, compSettings, nrUniqueEstimate,
+						tmpMap);
+			return Collections
+				.singletonList(compressColGroupForced(in, colIndexes, compSettings, nrUniqueEstimate, tmpMap));
 		}
 		else
-			return Collections.singletonList(compressColGroupForced(in, colIndexes, compSettings, nrUniqueEstimate));
+			return Collections
+				.singletonList(compressColGroupForced(in, colIndexes, compSettings, nrUniqueEstimate, tmpMap));
 
 	}
 
 	private static Collection<AColGroup> compressColGroupAndExtractEmptyColumns(MatrixBlock in, int[] colIndexes,
-		CompressionSettings compSettings, int nrUniqueEstimate) {
+		CompressionSettings compSettings, int nrUniqueEstimate, DblArrayIntListHashMap tmpMap) {
 		final IntArrayList e = new IntArrayList();
 		final IntArrayList v = new IntArrayList();
 		final SparseBlock sb = in.getSparseBlock();
@@ -184,9 +212,10 @@ public final class ColGroupFactory {
 			else
 				v.appendValue(col);
 		}
-		AColGroup empty = compressColGroupForced(in, e.extractValues(true), compSettings, nrUniqueEstimate);
+		AColGroup empty = compressColGroupForced(in, e.extractValues(true), compSettings, nrUniqueEstimate, tmpMap);
 		if(v.size() > 0) {
-			AColGroup colGroup = compressColGroupForced(in, v.extractValues(true), compSettings, nrUniqueEstimate);
+			AColGroup colGroup = compressColGroupForced(in, v.extractValues(true), compSettings, nrUniqueEstimate,
+				tmpMap);
 			return Arrays.asList(empty, colGroup);
 		}
 		else {
@@ -195,9 +224,13 @@ public final class ColGroupFactory {
 	}
 
 	private static AColGroup compressColGroupForced(MatrixBlock in, int[] colIndexes, CompressionSettings compSettings,
-		int nrUniqueEstimate) {
+		int nrUniqueEstimate, DblArrayIntListHashMap tmpMap) {
 		try {
-			ABitmap ubm = BitmapEncoder.extractBitmap(colIndexes, in, compSettings.transposed, nrUniqueEstimate);
+			ABitmap ubm;
+			if(colIndexes.length > 1 && tmpMap != null)
+				ubm = BitmapEncoder.extractBitmapMultiColumns(colIndexes, in, compSettings.transposed, tmpMap);
+			else
+				ubm = BitmapEncoder.extractBitmap(colIndexes, in, compSettings.transposed, nrUniqueEstimate);
 
 			CompressedSizeEstimator estimator = new CompressedSizeEstimatorExact(in, compSettings);
 
@@ -209,6 +242,7 @@ public final class ColGroupFactory {
 				sizeInfo.getTupleSparsity());
 		}
 		catch(Exception e) {
+			e.printStackTrace();
 			throw new DMLCompressionException("Error while compressing colgroup", e);
 		}
 	}

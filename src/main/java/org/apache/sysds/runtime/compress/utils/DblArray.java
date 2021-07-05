@@ -78,8 +78,4 @@ public class DblArray {
 	public String toString() {
 		return Arrays.toString(_arr);
 	}
-
-	public static boolean isZero(DblArray val) {
-		return val._arr == null;
-	}
 }

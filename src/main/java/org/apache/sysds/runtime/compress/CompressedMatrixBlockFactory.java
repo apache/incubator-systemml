@@ -235,7 +235,7 @@ public class CompressedMatrixBlockFactory {
 		boolean sparse = mb.isInSparseFormat();
 		transposeHeuristics();
 		if(compSettings.transposed)
-			mb = LibMatrixReorg.transpose(mb, new MatrixBlock(mb.getNumColumns(), mb.getNumRows(), sparse), k, false);
+			mb = LibMatrixReorg.transpose(mb, new MatrixBlock(mb.getNumColumns(), mb.getNumRows(), sparse), k, true);
 
 		logPhase();
 	}

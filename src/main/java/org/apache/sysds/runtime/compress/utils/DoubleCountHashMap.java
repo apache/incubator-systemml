@@ -20,6 +20,7 @@
 package org.apache.sysds.runtime.compress.utils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -209,5 +210,10 @@ public class DoubleCountHashMap {
 			if(_data[i] != null)
 				sb.append(", " + _data[i]);
 		return sb.toString();
+	}
+
+	public void reset(int size){
+		Arrays.fill(_data, null);
+		_size = 0;
 	}
 }

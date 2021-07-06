@@ -159,7 +159,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		_size= 0;
 	}
 
-	public void resizeTo(int size) {
+	public void reset(int size) {
 		int newSize = getPow2(size);
 		if(newSize > _data.length) {
 			_data = new DArrayIListEntry[newSize];

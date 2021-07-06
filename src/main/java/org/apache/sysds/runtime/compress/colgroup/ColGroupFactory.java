@@ -101,11 +101,9 @@ public final class ColGroupFactory {
 		List<CompressedSizeInfoColGroup> groups = csi.getInfo();
 
 		Collections.sort(groups, Comparator.comparing(g -> -g.getNumVals()));
-		DblArrayIntListHashMap tmpMap = new DblArrayIntListHashMap(groups.get(0).getNumVals() * 2);
-		for(CompressedSizeInfoColGroup g : groups) {
-			tmpMap.resizeTo(g.getNumVals() * 2);
+		Tmp tmpMap = new Tmp();
+		for(CompressedSizeInfoColGroup g : groups)
 			ret.addAll(compressColGroup(in, compSettings, tmpMap, g));
-		}
 
 		return ret;
 	}
@@ -162,19 +160,17 @@ public final class ColGroupFactory {
 		public Collection<AColGroup> call() {
 			ArrayList<AColGroup> res = new ArrayList<AColGroup>();
 
-			DblArrayIntListHashMap tmpMap = new DblArrayIntListHashMap(_groups.get(0).getNumVals() * 2);
-			for(CompressedSizeInfoColGroup g : _groups) {
-				tmpMap.resizeTo(g.getNumVals() * 2);
+			Tmp tmpMap = new Tmp();
+			for(CompressedSizeInfoColGroup g : _groups)
 				res.addAll(compressColGroup(_in, _compSettings, tmpMap, g));
-			}
 
 			return res;
 		}
 
 	}
 
-	private static Collection<AColGroup> compressColGroup(MatrixBlock in, CompressionSettings compSettings,
-		DblArrayIntListHashMap tmpMap, CompressedSizeInfoColGroup cg) {
+	private static Collection<AColGroup> compressColGroup(MatrixBlock in, CompressionSettings compSettings, Tmp tmpMap,
+		CompressedSizeInfoColGroup cg) {
 		final int[] colIndexes = cg.getColumns();
 		if(in.isEmpty())
 			return Collections.singletonList(
@@ -192,7 +188,7 @@ public final class ColGroupFactory {
 	}
 
 	private static Collection<AColGroup> compressColGroupAndExtractEmptyColumns(MatrixBlock in,
-		CompressionSettings compSettings, DblArrayIntListHashMap tmpMap, CompressedSizeInfoColGroup cg) {
+		CompressionSettings compSettings, Tmp tmpMap, CompressedSizeInfoColGroup cg) {
 		final IntArrayList e = new IntArrayList();
 		final IntArrayList v = new IntArrayList();
 		final SparseBlock sb = in.getSparseBlock();
@@ -214,14 +210,14 @@ public final class ColGroupFactory {
 		}
 	}
 
-	private static AColGroup compressColGroupForced(MatrixBlock in, CompressionSettings compSettings,
-		DblArrayIntListHashMap tmpMap, CompressedSizeInfoColGroup cg) {
+	private static AColGroup compressColGroupForced(MatrixBlock in, CompressionSettings compSettings, Tmp tmpMap,
+		CompressedSizeInfoColGroup cg) {
 		final int[] colIndexes = cg.getColumns();
 		return compressColGroupForced(in, compSettings, tmpMap, cg, colIndexes);
 	}
 
-	private static AColGroup compressColGroupForced(MatrixBlock in, CompressionSettings cs,
-		DblArrayIntListHashMap tmpMap, CompressedSizeInfoColGroup cg, int[] colIndexes) {
+	private static AColGroup compressColGroupForced(MatrixBlock in, CompressionSettings cs, Tmp tmp,
+		CompressedSizeInfoColGroup cg, int[] colIndexes) {
 		try {
 			final int nrUniqueEstimate = cg.getNumVals();
 			final CompressionType estimatedBestCompressionType = cg.getBestCompressionType();
@@ -233,12 +229,13 @@ public final class ColGroupFactory {
 				in.isInSparseFormat() && cs.transposed) {
 				// shortcut for creating SDC!
 				// throw new NotImplementedException();
-				return compressSDCZero(in.getSparseBlock(), colIndexes, in.getNumColumns(), nrUniqueEstimate);
+				return compressSDCZero(in.getSparseBlock(), colIndexes, in.getNumColumns(), tmp.getDblCountMap(nrUniqueEstimate));
 			}
 			else {
 				ABitmap ubm;
-				if(colIndexes.length > 1 && tmpMap != null)
-					ubm = BitmapEncoder.extractBitmapMultiColumns(colIndexes, in, cs.transposed, tmpMap);
+				if(colIndexes.length > 1)
+					ubm = BitmapEncoder.extractBitmapMultiColumns(colIndexes, in, cs.transposed,
+						tmp.getDblArrayMap(nrUniqueEstimate));
 				else
 					ubm = BitmapEncoder.extractBitmap(colIndexes, in, cs.transposed, nrUniqueEstimate);
 
@@ -478,14 +475,12 @@ public final class ColGroupFactory {
 		return new ColGroupConst(cols, numRows, dict);
 	}
 
-	public static AColGroup compressSDCZero(SparseBlock sb, int[] cols, int nRows, int estimatedDistinctCount) {
+	public static AColGroup compressSDCZero(SparseBlock sb, int[] cols, int nRows, DoubleCountHashMap map) {
 		final int sbRow = cols[0];
 		final int apos = sb.pos(sbRow);
 		final int alen = sb.size(sbRow) + apos;
 		final AOffset offsets = OffsetFactory.create(sb.indexes(sbRow), nRows, apos, alen);
 		final double[] vals = sb.values(sbRow);
-
-		DoubleCountHashMap map = new DoubleCountHashMap(estimatedDistinctCount );
 		// count distinct items frequencies
 		for(int j = apos; j < alen; j++)
 			map.increment(vals[j]);
@@ -506,4 +501,34 @@ public final class ColGroupFactory {
 		return new ColGroupSDCZeros(cols, nRows, new Dictionary(dict), offsets, mapToData, null);
 	}
 
+	protected static class Tmp {
+		private DblArrayIntListHashMap dblArrayMap;
+		private DoubleCountHashMap dblCountMap;
+
+		protected Tmp() {
+		}
+
+		protected DblArrayIntListHashMap getDblArrayMap(int size) {
+			if(dblArrayMap != null){
+				dblArrayMap.reset(size);
+				return dblArrayMap;
+			}
+			else {
+				dblArrayMap = new DblArrayIntListHashMap(size);
+				return dblArrayMap;
+			}
+
+		}
+
+		protected DoubleCountHashMap getDblCountMap(int size) {
+			if(dblCountMap != null){
+				dblCountMap.reset(size);
+				return dblCountMap;
+			}
+			else {
+				dblCountMap = new DoubleCountHashMap(size);
+				return dblCountMap;
+			}
+		}
+	}
 }

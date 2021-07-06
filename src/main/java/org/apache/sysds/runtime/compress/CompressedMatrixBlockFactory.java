@@ -204,12 +204,12 @@ public class CompressedMatrixBlockFactory {
 			res.setNonZeros(oldNNZ);
 		else
 			res.recomputeNonZeros();
-			
+
 		return new ImmutablePair<>(res, _stats);
 	}
 
 	private void classifyPhase() {
-		CompressedSizeEstimator sizeEstimator = CompressedSizeEstimatorFactory.getSizeEstimator(mb, compSettings);
+		CompressedSizeEstimator sizeEstimator = CompressedSizeEstimatorFactory.getSizeEstimator(mb, compSettings, k);
 		CompressedSizeInfo sizeInfos = sizeEstimator.computeCompressedSizeInfos(k);
 		_stats.estimatedSizeCols = sizeInfos.memoryEstimate();
 		logPhase();

@@ -61,7 +61,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		x |= x >> 14;
 		x |= x >> 15;
 		x |= x >> 16;
-		return x + 1;
+		return Math.max(x + 1, 4);
 	}
 
 	public IntArrayList get(DblArray key) {
@@ -91,18 +91,13 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		int ix = indexFor(hash, _data.length);
 
 		// add new table entry (constant time)
-		DArrayIListEntry enew = new DArrayIListEntry(key, value);
 		while(_data[ix] != null && !_data[ix].keyEquals(key)) {
 			hash = Integer.hashCode(hash + 1); // hash of hash
 			ix = indexFor(hash, _data.length);
 			hashMissCount++;
 		}
-		_data[ix] = enew;
+		_data[ix] = new DArrayIListEntry(key, value);
 		_size++;
-
-		// resize if necessary
-		if(_size >= LOAD_FACTOR * _data.length)
-			resize();
 	}
 
 	public void appendValue(DblArray key, int value) {
@@ -161,6 +156,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 
 	public void reset() {
 		Arrays.fill(_data, null);
+		_size= 0;
 	}
 
 	public void resizeTo(int size) {
@@ -172,8 +168,8 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 			Arrays.fill(_data, null);
 			// only allocate new if the size is smaller than 2x
 			if(size < _data.length / 2)
-				_data = new DArrayIListEntry[newSize];
-
+			_data = new DArrayIListEntry[newSize];
 		}
+		_size = 0;
 	}
 }

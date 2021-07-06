@@ -41,6 +41,7 @@ public class CompressedSizeEstimatorSample extends CompressedSizeEstimator {
 	private int[] _sampleRows;
 	private MatrixBlock _sample;
 	private HashMap<Integer, Double> _solveCache = null;
+	private final int _k;
 
 	/**
 	 * CompressedSizeEstimatorSample, samples from the input data and estimates the size of the compressed matrix.
@@ -49,8 +50,9 @@ public class CompressedSizeEstimatorSample extends CompressedSizeEstimator {
 	 * @param cs         The Settings used for the sampling, and compression, contains information such as seed.
 	 * @param sampleSize The size to sample from the data.
 	 */
-	public CompressedSizeEstimatorSample(MatrixBlock data, CompressionSettings cs, int sampleSize) {
+	public CompressedSizeEstimatorSample(MatrixBlock data, CompressionSettings cs, int sampleSize, int k) {
 		super(data, cs);
+		_k = k;
 		_sample = sampleData(sampleSize);
 	}
 
@@ -72,7 +74,7 @@ public class CompressedSizeEstimatorSample extends CompressedSizeEstimator {
 			sampledMatrixBlock.setSparseBlock(new SparseBlockMCSR(rows, false));
 			sampledMatrixBlock.recomputeNonZeros();
 			_transposed = true;
-			sampledMatrixBlock = LibMatrixReorg.transposeInPlace(sampledMatrixBlock, 16);
+			sampledMatrixBlock = LibMatrixReorg.transposeInPlace(sampledMatrixBlock, _k);
 		}
 		else {
 			MatrixBlock select = (_cs.transposed) ? new MatrixBlock(_data.getNumColumns(), 1,

@@ -21,8 +21,6 @@ package org.apache.sysds.runtime.compress.lib;
 
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.compress.readers.ReaderColumnSelection;
 import org.apache.sysds.runtime.compress.utils.ABitmap;
@@ -42,7 +40,7 @@ import org.apache.sysds.runtime.matrix.data.MatrixBlock;
  */
 public class BitmapEncoder {
 
-	private static final Log LOG = LogFactory.getLog(BitmapEncoder.class.getName());
+	// private static final Log LOG = LogFactory.getLog(BitmapEncoder.class.getName());
 
 	/**
 	 * Generate uncompressed bitmaps for a set of columns in an uncompressed matrix block.

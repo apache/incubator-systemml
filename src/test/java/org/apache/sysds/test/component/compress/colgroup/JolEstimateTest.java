@@ -124,7 +124,7 @@ public abstract class JolEstimateTest {
 				.setValidCompressions(EnumSet.of(getCT())).setMinimumSampleSize(100).setSeed(seed).create();
 			cs.transposed = true;
 
-			final CompressedSizeInfoColGroup cgsi = CompressedSizeEstimatorFactory.getSizeEstimator(mbt, cs)
+			final CompressedSizeInfoColGroup cgsi = CompressedSizeEstimatorFactory.getSizeEstimator(mbt, cs, 1)
 				.estimateCompressedColGroupSize();
 
 			if(cg.getCompType() != CompressionType.UNCOMPRESSED && actualNumberUnique > 10) {

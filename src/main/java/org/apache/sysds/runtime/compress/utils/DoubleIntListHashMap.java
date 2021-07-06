@@ -32,8 +32,6 @@ public class DoubleIntListHashMap {
 	protected static final int INIT_CAPACITY = 8;
 	protected static final int RESIZE_FACTOR = 2;
 	protected static final float LOAD_FACTOR = 0.50f;
-	public static int hashMissCount = 0;
-
 	protected int _size = -1;
 	private DIListEntry[] _data = null;
 

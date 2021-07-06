@@ -35,8 +35,6 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang.NotImplementedException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.controlprogram.caching.MatrixObject.UpdateType;
 import org.apache.sysds.runtime.data.DenseBlock;
@@ -71,7 +69,7 @@ import org.apache.sysds.runtime.util.UtilFunctions;
  */
 public class LibMatrixReorg {
 
-	private static final Log LOG = LogFactory.getLog(LibMatrixReorg.class.getName());
+	// private static final Log LOG = LogFactory.getLog(LibMatrixReorg.class.getName());
 
 	//minimum number of elements for multi-threaded execution
 	public static long PAR_NUMCELL_THRESHOLD = 1024*1024; //1M
@@ -244,6 +242,7 @@ public class LibMatrixReorg {
 			int len = row ? in.rlen : in.clen;
 			int blklen = (int)(Math.ceil((double)len/k));
 			blklen += (!out.sparse && (blklen%8)!=0) ? 8-blklen%8 : 0;
+			blklen = (out.sparse && allowCSR) ? Math.max(blklen, 100): blklen;
 			for( int i=0; i<k & i*blklen<len; i++ )
 				tasks.add(new TransposeTask(in, out, row, i*blklen, Math.min((i+1)*blklen, len), cnt));
 			List<Future<Object>> taskret = pool.invokeAll(tasks);

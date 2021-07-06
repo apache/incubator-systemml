@@ -21,16 +21,20 @@ package org.apache.sysds.runtime.compress.utils;
 
 import java.util.ArrayList;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 public class DoubleCountHashMap {
-	protected static final int INIT_CAPACITY = 8;
+
+	protected static final Log LOG = LogFactory.getLog(DoubleCountHashMap.class.getName());
 	protected static final int RESIZE_FACTOR = 2;
-	protected static final float LOAD_FACTOR = 0.50f;
+	protected static final float LOAD_FACTOR = 0.80f;
 
 	protected int _size = -1;
-	private DCounts[] _data = null;
+	private Bucket[] _data = null;
 
 	public DoubleCountHashMap(int init_capacity) {
-		_data = new DCounts[getPow2(init_capacity)];
+		_data = new Bucket[getPow2(init_capacity)];
 		_size = 0;
 	}
 
@@ -61,32 +65,35 @@ public class DoubleCountHashMap {
 		// compute entry index position
 		int hash = hash(ent.key);
 		int ix = indexFor(hash, _data.length);
-
-		while(_data[ix] != null && !(_data[ix].key == ent.key)) {
-			hash = Integer.hashCode(hash + 1); // hash of hash
-			ix = indexFor(hash, _data.length);
-			CustomHashMap.hashMissCount++;
+		Bucket l = _data[ix];
+		if(l == null)
+			_data[ix] = new Bucket(ent);
+		else {
+			while(l != null)
+				l = l.n;
+			Bucket ob = _data[ix];
+			_data[ix] = new Bucket(ent);
+			_data[ix].n = ob;
 		}
-		_data[ix] = ent;
 		_size++;
+
 	}
 
 	public void increment(double key) {
 		int hash = hash(key);
 		int ix = indexFor(hash, _data.length);
+		Bucket l = _data[ix];
+		while(l != null && !(l.v.key == key))
+			l = l.n;
 
-		while(_data[ix] != null && !(_data[ix].key == key)) {
-			hash = Integer.hashCode(hash + 1); // hash of hash
-			ix = indexFor(hash, _data.length);
-			CustomHashMap.hashMissCount++;
-		}
-		DCounts e = _data[ix];
-		if(e == null) {
-			_data[ix] = new DCounts(key);
+		if(l == null) {
+			Bucket ob = _data[ix];
+			_data[ix] = new Bucket(new DCounts(key));
+			_data[ix].n = ob;
 			_size++;
 		}
 		else
-			_data[ix].inc();
+			l.v.count++;
 
 		if(_size >= LOAD_FACTOR * _data.length)
 			resize();
@@ -101,20 +108,21 @@ public class DoubleCountHashMap {
 	public int get(double key) {
 		int hash = hash(key);
 		int ix = indexFor(hash, _data.length);
+		Bucket l = _data[ix];
+		while(!(l.v.key == key))
+			l = l.n;
 
-		while(!(_data[ix].key == key)) {
-			hash = Integer.hashCode(hash + 1); // hash of hash
-			ix = indexFor(hash, _data.length);
-			CustomHashMap.hashMissCount++;
-		}
-		return _data[ix].count;
+		return l.v.count;
 	}
 
 	public ArrayList<DCounts> extractValues() {
 		ArrayList<DCounts> ret = new ArrayList<>(_size);
-		for(DCounts e : _data)
-			if(e != null)
-				ret.add(e);
+		for(Bucket e : _data){
+			while(e != null) {
+				ret.add(e.v);
+				e = e.n;
+			}
+		}
 
 		return ret;
 	}
@@ -125,14 +133,17 @@ public class DoubleCountHashMap {
 			return;
 
 		// resize data array and copy existing contents
-		DCounts[] olddata = _data;
-		_data = new DCounts[_data.length * RESIZE_FACTOR];
+		Bucket[] olddata = _data;
+		_data = new Bucket[_data.length * RESIZE_FACTOR];
 		_size = 0;
 
 		// rehash all entries
-		for(DCounts e : olddata)
-			if(e != null)
-				appendValue(e);
+		for(Bucket e : olddata) {
+			while(e != null) {
+				appendValue(e.v);
+				e = e.n;
+			}
+		}
 
 	}
 
@@ -152,6 +163,23 @@ public class DoubleCountHashMap {
 
 	private static int indexFor(int h, int length) {
 		return h & (length - 1);
+	}
+
+	protected class Bucket {
+		protected DCounts v;
+		protected Bucket n = null;
+
+		protected Bucket(DCounts v) {
+			this.v = v;
+		}
+
+		@Override
+		public String toString() {
+			if(n == null)
+				return v.toString();
+			else
+				return v.toString() + "->" + n.toString();
+		}
 	}
 
 	public class DCounts {

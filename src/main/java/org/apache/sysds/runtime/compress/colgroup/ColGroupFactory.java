@@ -92,7 +92,6 @@ public final class ColGroupFactory {
 
 	private static List<AColGroup> compressColGroupsRowBasedSingleThread(MatrixBlock in, CompressedSizeInfo csi,
 		CompressionSettings cs) {
-		// List<CompressedSizeInfoColGroup> groups = csi.getInfo();
 		throw new NotImplementedException();
 	}
 
@@ -486,8 +485,7 @@ public final class ColGroupFactory {
 		final AOffset offsets = OffsetFactory.create(sb.indexes(sbRow), nRows, apos, alen);
 		final double[] vals = sb.values(sbRow);
 
-
-		DoubleCountHashMap map = new DoubleCountHashMap(estimatedDistinctCount * 2);
+		DoubleCountHashMap map = new DoubleCountHashMap(estimatedDistinctCount );
 		// count distinct items frequencies
 		for(int j = apos; j < alen; j++)
 			map.increment(vals[j]);

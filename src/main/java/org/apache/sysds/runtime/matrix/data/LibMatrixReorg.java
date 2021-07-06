@@ -35,6 +35,8 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.controlprogram.caching.MatrixObject.UpdateType;
 import org.apache.sysds.runtime.data.DenseBlock;
@@ -69,10 +71,10 @@ import org.apache.sysds.runtime.util.UtilFunctions;
  */
 public class LibMatrixReorg {
 
-	// private static final Log LOG = LogFactory.getLog(LibMatrixReorg.class.getName());
+	private static final Log LOG = LogFactory.getLog(LibMatrixReorg.class.getName());
 
 	//minimum number of elements for multi-threaded execution
-	public static final long PAR_NUMCELL_THRESHOLD = 1024*1024; //1M
+	public static long PAR_NUMCELL_THRESHOLD = 1024*1024; //1M
 	
 	// SORTING threshold
 	public static final int PAR_NUMCELL_THRESHOLD_SORT = 1024;
@@ -183,8 +185,12 @@ public class LibMatrixReorg {
 		
 		return out;
 	}
-
+	
 	public static MatrixBlock transpose( MatrixBlock in, MatrixBlock out, int k ) {
+		return transpose(in, out, k, false);
+	}
+	
+	public static MatrixBlock transpose( MatrixBlock in, MatrixBlock out, int k, boolean allowCSR){
 		//redirect small or special cases to sequential execution
 		if( in.isEmptyBlock(false) || (in.rlen * in.clen < PAR_NUMCELL_THRESHOLD) || k == 1
 			|| (SHALLOW_COPY_REORG && !in.sparse && !out.sparse && (in.rlen==1 || in.clen==1) )
@@ -198,7 +204,11 @@ public class LibMatrixReorg {
 		
 		//set meta data and allocate output arrays (if required)
 		out.nonZeros = in.nonZeros;
-		if( out.sparse )
+		if(out.sparse && allowCSR){
+			int size = (int)in.getNonZeros();
+			out.sparseBlock = new SparseBlockCSR(in.getNumColumns(), size, size);
+		}
+		else if( out.sparse)
 			out.allocateSparseRowsBlock(false);
 		else
 			out.allocateDenseBlock(false);
@@ -217,6 +227,17 @@ public class LibMatrixReorg {
 				for( Future<int[]> rtask : rtasks )
 					cnt = mergeNnzCounts(cnt, rtask.get());
 			} 
+
+			if(out.sparse && allowCSR){
+				int[] outPtr = ((SparseBlockCSR)out.sparseBlock).rowPointers();
+				for(int i = 0; i < cnt.length; i++){
+					// set out pointers to correct start of rows.
+					outPtr[i + 1] = outPtr[i] + cnt[i];
+					// set the cnt value to the new pointer to start of row in CSR
+					cnt[i] = outPtr[i]; 
+				}
+
+			}
 			//compute actual transpose and check for errors
 			ArrayList<TransposeTask> tasks = new ArrayList<>();
 			boolean row = (in.sparse || in.rlen >= in.clen) && !out.sparse;
@@ -902,7 +923,7 @@ public class LibMatrixReorg {
 			if( cnt[cl] > 0 )
 				c.allocate(cl, cnt[cl]);
 			
-			for( int i=0; i<ru; i++ ) {
+			for( int i=rl; i<ru; i++ ) {
 				if( a.isEmpty(i) ) continue;
 				int apos = a.pos(i);
 				int alen = a.size(i);
@@ -956,6 +977,85 @@ public class LibMatrixReorg {
 						for( ; j<apos+alen && aix[j]<bjmin; j++ ) {
 							c.allocate(aix[j], ennz2, n2);
 							c.append(aix[j], i, avals[j]);
+						}
+						ix[i-bi] = j - apos; //keep block boundary
+					}
+				}
+			}
+		}
+	}
+
+	private static void transposeSparseToSparseCSR(MatrixBlock in, MatrixBlock out, int rl, int ru, int cl, int cu,
+		int[] cnt) {
+
+		// NOTE: called only in sequential or column-wise parallel execution
+		if(rl > 0 || ru < in.rlen)
+			throw new RuntimeException("Unsupported row-parallel transposeSparseToSparse: " + rl + ", " + ru);
+
+		final SparseBlock a = in.getSparseBlock();
+		final SparseBlockCSR c = (SparseBlockCSR) out.getSparseBlock();
+
+		final int[] outIndexes = c.indexes();
+		final double[] outValues = c.values();
+
+		if(cu - cl == 1) {
+			int i = 0;
+			final int end = c.size(cl) + c.pos(cl);
+			int outPointer = cnt[cl];
+			while(outPointer < end) {
+				if(!a.isEmpty(i)){
+					final int apos = a.pos(i);
+					final int alen = a.size(i);
+					final int[] aix = a.indexes(i);
+					final double[] avals = a.values(i);
+					for(int j = apos; j < apos + alen && aix[j] <= cl; j++)
+						if(aix[j] == cl) {
+							outIndexes[outPointer] = i;
+							outValues[outPointer] = avals[j];
+							outPointer++;
+						}
+				}
+				i++;
+			}
+		}
+		else {
+			final long xsp = (long) in.rlen * in.clen / in.nonZeros;
+			final int blocksizeI = Math.max(128, (int) (8 * xsp));
+			final int blocksizeJ = Math.max(128, (int) (8 * xsp));
+
+			// temporary array for block boundaries (for preventing binary search)
+			int[] ix = new int[Math.min(blocksizeI, ru - rl)];
+
+				
+			//blocked execution
+			for( int bi=rl; bi<ru; bi+=blocksizeI )
+			{
+				Arrays.fill(ix, 0);
+				//find column starting positions
+				int bimin = Math.min(bi+blocksizeI, ru);
+				if( cl > 0 ) {
+					for( int i=bi; i<bimin; i++ ) {
+						if( a.isEmpty(i) ) continue;
+						int j = a.posFIndexGTE(i, cl);
+						ix[i-bi] = (j>=0) ? j : a.size(i);
+					}
+				}
+				
+				for( int bj=cl; bj<cu; bj+=blocksizeJ ) {
+					int bjmin = Math.min(bj+blocksizeJ, cu);
+					//core block transpose operation
+					for( int i=bi; i<bimin; i++ ) {
+						if( a.isEmpty(i) ) continue;
+						int apos = a.pos(i);
+						int alen = a.size(i);
+						int[] aix = a.indexes(i);
+						double[] avals = a.values(i);
+						int j = ix[i-bi] + apos; //last block boundary
+						for( ; j<apos+alen && aix[j]<bjmin; j++ ) {
+							int pointer = cnt[aix[j]];
+							cnt[aix[j]]++;
+							outIndexes[pointer] = i;
+							outValues[pointer] = avals[j];
 						}
 						ix[i-bi] = j - apos; //keep block boundary
 					}
@@ -3040,6 +3140,8 @@ public class LibMatrixReorg {
 			//execute transpose operation
 			if( !_in.sparse && !_out.sparse )
 				transposeDenseToDense( _in, _out, rl, ru, cl, cu );
+			else if( _in.sparse && _out.sparse && _out.sparseBlock instanceof SparseBlockCSR)
+				transposeSparseToSparseCSR(_in, _out, rl, ru, cl, cu, _cnt);
 			else if( _in.sparse && _out.sparse )
 				transposeSparseToSparse( _in, _out, rl, ru, cl, cu, _cnt );
 			else if( _in.sparse )

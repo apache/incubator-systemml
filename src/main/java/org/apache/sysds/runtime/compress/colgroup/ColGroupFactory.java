@@ -487,38 +487,37 @@ public final class ColGroupFactory {
 		final double[] vals = sb.values(sbRow);
 		DoubleCountHashMap map = new DoubleCountHashMap(estimatedDistinctCount * 2);
 		// count distinct items frequencies
-		for(double d : vals) 
-			map.increment(d);
-		
+		for(int j = apos; j < alen; j++)
+			map.increment(vals[j]);
+
 		List<DCounts> entries = map.extractValues();
-		Collections.sort(entries, Comparator.comparing(x -> - x.count));
+		Collections.sort(entries, Comparator.comparing(x -> -x.count));
 		int[] counts = new int[entries.size()];
 		double[] dict = new double[entries.size()];
-		for(int i = 0; i < entries.size(); i++){
+		for(int i = 0; i < entries.size(); i++) {
 			DCounts x = entries.get(i);
 			counts[i] = x.count;
 			dict[i] = x.key;
 			x.count = i;
 		}
 		AMapToData mapToData = MapToFactory.create(vals.length, entries.size());
-		for(int j = 0; j < vals.length; j++)
+		for(int j = apos; j < alen; j++)
 			mapToData.set(j, map.get(vals[j]));
-		// LOG.error(entries);
-		// throw new NotImplementedException();
-		// ADictionary dict;
-		// AMapToData mapToData;
+
 		return new ColGroupSDCZeros(cols, nRows, new Dictionary(dict), offsets, mapToData, null);
 	}
 
-	protected static class Ent{
+	protected static class Ent {
 		double v;
 		int c;
-		protected Ent(double v, int c){
+
+		protected Ent(double v, int c) {
 			this.v = v;
 			this.c = c;
 		}
+
 		@Override
-		public String toString(){
+		public String toString() {
 			return "[" + c + ":" + v + "]";
 		}
 	}

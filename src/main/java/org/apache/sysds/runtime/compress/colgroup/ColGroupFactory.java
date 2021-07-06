@@ -485,11 +485,12 @@ public final class ColGroupFactory {
 		final int alen = sb.size(sbRow) + apos;
 		final AOffset offsets = OffsetFactory.create(sb.indexes(sbRow), nRows, apos, alen);
 		final double[] vals = sb.values(sbRow);
+
+
 		DoubleCountHashMap map = new DoubleCountHashMap(estimatedDistinctCount * 2);
 		// count distinct items frequencies
 		for(int j = apos; j < alen; j++)
 			map.increment(vals[j]);
-
 		List<DCounts> entries = map.extractValues();
 		Collections.sort(entries, Comparator.comparing(x -> -x.count));
 		int[] counts = new int[entries.size()];
@@ -500,26 +501,11 @@ public final class ColGroupFactory {
 			dict[i] = x.key;
 			x.count = i;
 		}
-		AMapToData mapToData = MapToFactory.create(vals.length, entries.size());
+		AMapToData mapToData = MapToFactory.create((alen - apos), entries.size());
 		for(int j = apos; j < alen; j++)
-			mapToData.set(j, map.get(vals[j]));
+			mapToData.set(j - apos, map.get(vals[j]));
 
 		return new ColGroupSDCZeros(cols, nRows, new Dictionary(dict), offsets, mapToData, null);
-	}
-
-	protected static class Ent {
-		double v;
-		int c;
-
-		protected Ent(double v, int c) {
-			this.v = v;
-			this.c = c;
-		}
-
-		@Override
-		public String toString() {
-			return "[" + c + ":" + v + "]";
-		}
 	}
 
 }

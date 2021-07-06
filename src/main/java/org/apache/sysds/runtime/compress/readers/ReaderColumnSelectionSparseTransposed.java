@@ -82,7 +82,6 @@ public class ReaderColumnSelectionSparseTransposed extends ReaderColumnSelection
 	}
 
 	protected DblArray getNextRow() {
-
 		if(_lastRow == _numRows - 1) {
 			return null;
 		}

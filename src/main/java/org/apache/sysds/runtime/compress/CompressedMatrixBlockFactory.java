@@ -187,8 +187,8 @@ public class CompressedMatrixBlockFactory {
 		_stats.denseSize = MatrixBlock.estimateSizeInMemory(mb.getNumRows(), mb.getNumColumns(), 1.0);
 		_stats.originalSize = mb.getInMemorySize();
 
-		res = new CompressedMatrixBlock(mb.getNumRows(), mb.getNumColumns()); // copy metadata.
-		res.setNonZeros(mb.getNonZeros());
+		res = new CompressedMatrixBlock(mb); // copy metadata and allocate soft reference
+
 		classifyPhase();
 		if(coCodeColGroups == null)
 			return abortCompression();
@@ -250,9 +250,10 @@ public class CompressedMatrixBlockFactory {
 				break;
 			default:
 				if(mb.isInSparseFormat()) {
-					boolean isAboveRowNumbers = mb.getNumRows() > 500000;
-					boolean isAboveThreadToColumnRatio = coCodeColGroups.getNumberColGroups() > mb.getNumColumns() / 2;
-					compSettings.transposed = isAboveRowNumbers || isAboveThreadToColumnRatio;
+					compSettings.transposed = false;
+					// boolean isAboveRowNumbers = mb.getNumRows() > 500000;
+					// boolean isAboveThreadToColumnRatio = coCodeColGroups.getNumberColGroups() > mb.getNumColumns() / 2;
+					// compSettings.transposed = isAboveRowNumbers || isAboveThreadToColumnRatio;
 				}
 				else
 					compSettings.transposed = false;
@@ -351,7 +352,7 @@ public class CompressedMatrixBlockFactory {
 		}
 
 		_stats.setColGroupsCounts(res.getColGroups());
-		System.gc();
+		// System.gc();
 		logPhase();
 
 	}

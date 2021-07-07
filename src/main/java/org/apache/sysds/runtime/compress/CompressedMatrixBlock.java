@@ -127,7 +127,7 @@ public class CompressedMatrixBlock extends MatrixBlock {
 	 */
 	protected SoftReference<MatrixBlock> decompressedVersion;
 
-	public CompressedMatrixBlock(){
+	public CompressedMatrixBlock() {
 		super(true);
 		sparse = false;
 		nonZeros = -1;
@@ -154,6 +154,20 @@ public class CompressedMatrixBlock extends MatrixBlock {
 		rlen = that.getNumRows();
 		clen = that.getNumColumns();
 		this.copyCompressedMatrix(that);
+	}
+
+	/**
+	 * Constructor with soft reference to uncompressed version of the matrix.
+	 * 
+	 * @param uncompressedMatrixBlock
+	 */
+	protected CompressedMatrixBlock(MatrixBlock uncompressedMatrixBlock) {
+		super(true);
+		rlen = uncompressedMatrixBlock.getNumRows();
+		clen = uncompressedMatrixBlock.getNumColumns();
+		sparse = false;
+		nonZeros = uncompressedMatrixBlock.getNonZeros();
+		decompressedVersion = new SoftReference<>(uncompressedMatrixBlock);
 	}
 
 	@Override

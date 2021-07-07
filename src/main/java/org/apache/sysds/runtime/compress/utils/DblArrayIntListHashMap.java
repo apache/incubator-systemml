@@ -32,7 +32,7 @@ public class DblArrayIntListHashMap {
 
 	protected static final int INIT_CAPACITY = 8;
 	protected static final int RESIZE_FACTOR = 2;
-	protected static final float LOAD_FACTOR = 0.50f;
+	protected static final float LOAD_FACTOR = 0.5f;
 	public static int hashMissCount = 0;
 
 	protected int _size = -1;

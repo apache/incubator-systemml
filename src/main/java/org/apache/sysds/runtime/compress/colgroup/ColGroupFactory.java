@@ -111,6 +111,7 @@ public final class ColGroupFactory {
 	private static List<AColGroup> compressColGroupsParallel(MatrixBlock in, CompressedSizeInfo csi,
 		CompressionSettings compSettings, int k) {
 		try {
+			LOG.error("k : " + k);
 			ExecutorService pool = CommonThreadPool.get(k);
 			List<CompressTask> tasks = new ArrayList<>();
 

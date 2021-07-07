@@ -411,6 +411,7 @@ public abstract class CompressedTestBase extends TestBase {
 
 			MatrixBlock decompressedMatrixBlock = ((CompressedMatrixBlock) cmb).decompress(_k);
 			compareResultMatrices(mb, decompressedMatrixBlock, 1);
+			
 			assertEquals(this.toString() + " number of non zeros should be equal after decompression", mb.getNonZeros(),
 				decompressedMatrixBlock.getNonZeros());
 		}

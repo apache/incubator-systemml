@@ -350,8 +350,6 @@ public class CompressedMatrixBlockFactory {
 			return;
 		}
 
-		mb.cleanupBlock(true, true);
-
 		_stats.setColGroupsCounts(res.getColGroups());
 
 		logPhase();

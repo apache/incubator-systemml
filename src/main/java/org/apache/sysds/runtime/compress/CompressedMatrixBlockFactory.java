@@ -351,7 +351,7 @@ public class CompressedMatrixBlockFactory {
 		}
 
 		_stats.setColGroupsCounts(res.getColGroups());
-
+		System.gc();
 		logPhase();
 
 	}

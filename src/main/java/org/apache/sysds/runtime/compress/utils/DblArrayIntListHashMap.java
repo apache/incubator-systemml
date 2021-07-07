@@ -26,14 +26,22 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-/**
- * This class provides a memory-efficient replacement for {@code HashMap<DblArray,IntArrayList>} for restricted use
- * cases.
- * 
- */
-public class DblArrayIntListHashMap extends CustomHashMap {
+public class DblArrayIntListHashMap {
 
 	protected static final Log LOG = LogFactory.getLog(DblArrayIntListHashMap.class.getName());
+
+	protected static final int INIT_CAPACITY = 8;
+	protected static final int RESIZE_FACTOR = 2;
+	protected static final float LOAD_FACTOR = 0.50f;
+	public static int hashMissCount = 0;
+
+	protected int _size = -1;
+
+	protected DArrayIListEntry[] _data = null;
+
+	public int size() {
+		return _size;
+	}
 
 	public DblArrayIntListHashMap() {
 		_data = new DArrayIListEntry[INIT_CAPACITY];
@@ -156,7 +164,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 
 	public void reset() {
 		Arrays.fill(_data, null);
-		_size= 0;
+		_size = 0;
 	}
 
 	public void reset(int size) {
@@ -168,8 +176,61 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 			Arrays.fill(_data, null);
 			// only allocate new if the size is smaller than 2x
 			if(size < _data.length / 2)
-			_data = new DArrayIListEntry[newSize];
+				_data = new DArrayIListEntry[newSize];
 		}
 		_size = 0;
+	}
+
+	protected static int hash(DblArray key) {
+		int h = key.hashCode();
+
+		// This function ensures that hashCodes that differ only by
+		// constant multiples at each bit position have a bounded
+		// number of collisions (approximately 8 at default load factor).
+		h ^= (h >>> 20) ^ (h >>> 12);
+		return h ^ (h >>> 7) ^ (h >>> 4);
+	}
+
+	protected static int indexFor(int h, int length) {
+		return h & (length - 1);
+	}
+
+	public class DArrayIListEntry {
+		public DblArray key;
+		public IntArrayList value;
+
+		public DArrayIListEntry(DblArray ekey, IntArrayList evalue) {
+			key = ekey;
+			value = evalue;
+		}
+
+		@Override
+		public String toString() {
+			return key + ":" + value;
+
+		}
+
+		public boolean keyEquals(DblArray keyThat) {
+			return key.equals(keyThat);
+		}
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append(this.getClass().getSimpleName() + this.hashCode());
+		sb.append("   " + _size);
+		for(int i = 0; i < _data.length; i++) {
+			DArrayIListEntry ent = _data[i];
+			if(ent != null) {
+
+				sb.append("\n");
+				sb.append("id:" + i);
+				sb.append("[");
+				sb.append(ent);
+				sb.append("]");
+			}
+		}
+		return sb.toString();
 	}
 }

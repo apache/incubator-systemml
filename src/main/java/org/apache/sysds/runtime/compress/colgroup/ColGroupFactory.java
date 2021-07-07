@@ -111,7 +111,6 @@ public final class ColGroupFactory {
 	private static List<AColGroup> compressColGroupsParallel(MatrixBlock in, CompressedSizeInfo csi,
 		CompressionSettings compSettings, int k) {
 		try {
-			LOG.error("k : " + k);
 			ExecutorService pool = CommonThreadPool.get(k);
 			List<CompressTask> tasks = new ArrayList<>();
 
@@ -230,7 +229,8 @@ public final class ColGroupFactory {
 				in.isInSparseFormat() && cs.transposed) {
 				// shortcut for creating SDC!
 				// throw new NotImplementedException();
-				return compressSDCZero(in.getSparseBlock(), colIndexes, in.getNumColumns(), tmp.getDblCountMap(nrUniqueEstimate));
+				return compressSDCZero(in.getSparseBlock(), colIndexes, in.getNumColumns(),
+					tmp.getDblCountMap(nrUniqueEstimate));
 			}
 			else {
 				ABitmap ubm;
@@ -510,7 +510,7 @@ public final class ColGroupFactory {
 		}
 
 		protected DblArrayIntListHashMap getDblArrayMap(int size) {
-			if(dblArrayMap != null){
+			if(dblArrayMap != null) {
 				dblArrayMap.reset(size);
 				return dblArrayMap;
 			}
@@ -522,7 +522,7 @@ public final class ColGroupFactory {
 		}
 
 		protected DoubleCountHashMap getDblCountMap(int size) {
-			if(dblCountMap != null){
+			if(dblCountMap != null) {
 				dblCountMap.reset(size);
 				return dblCountMap;
 			}

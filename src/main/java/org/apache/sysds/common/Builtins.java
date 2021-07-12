@@ -122,6 +122,7 @@ public enum Builtins {
 	EVAL("eval", false),
 	FLOOR("floor", false),
 	FRAME_SORT("frameSort", true),
+	GARCH("garch", true),
 	GAUSSIAN_CLASSIFIER("gaussianClassifier", true),
 	GET_ACCURACY("getAccuracy", true),
 	GLM("glm", true),

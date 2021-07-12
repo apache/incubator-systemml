@@ -121,6 +121,8 @@ public enum Builtins {
 	EXP("exp", false),
 	EVAL("eval", false),
 	FLOOR("floor", false),
+	FF_TRAIN("ffTrain", true),
+	FF_PREDICT("ffPredict", true),
 	FRAME_SORT("frameSort", true),
 	GAUSSIAN_CLASSIFIER("gaussianClassifier", true),
 	GET_ACCURACY("getAccuracy", true),

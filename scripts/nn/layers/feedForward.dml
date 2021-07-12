@@ -1,0 +1,82 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+#
+#-------------------------------------------------------------
+#
+# This script performs forward pass through ff neural network in ffTrain and ffPredict builtins
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME      TYPE            DEFAULT     MEANING
+# --------------------------------------------------------------------------------------------
+# X         Matrix[double]    ---       Training data
+# layers    List[unknown]     ---       List of layers and output layer activation function
+# predict   Boolean           FALSE     Flag used to avoid dropout when predicting
+# --------------------------------------------------------------------------------------------
+# OUTPUT: 
+# cache     List[unknown]     ---       Caches all intermediate steps of forward pass
+#
+
+source("nn/layers/sigmoid.dml") as sigmoid
+source("nn/layers/leaky_relu.dml") as lrelu
+source("nn/layers/relu.dml") as relu
+source("nn/layers/tanh.dml") as tanh
+source("nn/layers/affine.dml") as affine
+source("nn/layers/dropout.dml") as dropout
+source("nn/layers/softmax.dml") as softmax
+
+feedForward = function(Matrix[double] X, List[unknown] layers, Boolean predict = FALSE) 
+  return(List[unknown] cache) {
+  p = 0.35 # dropout probability
+
+  # layer 1
+  out1 = affine::forward(X, as.matrix(layers["W1"]), as.matrix(layers["b1"]))
+  outr1 = relu::forward(out1)
+  [outd1, maskd1] = dropout::forward(outr1, p, -1)
+  if(predict) {
+    outd1 = outr1
+  }
+  # layer 2
+  out2 = affine::forward(outd1, as.matrix(layers["W2"]), as.matrix(layers["b2"]))
+  
+  if (as.scalar(layers["activation"]) == "logits") {
+    cache = list(out1=out1, outr1=outr1, outd1=outd1, maskd1=maskd1, out2=out2)
+  } else {
+    outs2 = apply_activation(out2, as.scalar(layers["activation"]))
+    cache = list(out1=out1, outr1=outr1, outd1=outd1, maskd1=maskd1, out2=out2, outs2=outs2)
+  }
+}
+
+apply_activation = function(Matrix[double] input, String activation) 
+  return (Matrix[double] out) {
+    
+  if(activation == "sigmoid") {
+    out = sigmoid::forward(input)
+  } else if (activation == "relu") {
+    out = relu::forward(input)
+  } else if (activation == "lrelu") {
+    out = lrelu::forward(input)
+  } else if (activation == "tanh") {
+    out = tanh::forward(input)
+  } else if (activation == "softmax") {
+    out = softmax::forward(input)
+  }
+}

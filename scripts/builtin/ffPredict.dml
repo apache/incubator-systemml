@@ -1,0 +1,56 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+
+# This builtin function makes prediction given data and trained feedforward neural network model
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME        TYPE           DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# Model       List[unknown]   ---      Trained ff neural network model
+# X           Matrix[Double]  ---      Data used for making predictions
+# batch_size  Integer         128      Batch size
+# --------------------------------------------------------------------------------------------
+# OUTPUT: 
+# pred      Matrix[Double]  ---      Predicted value
+#
+
+source("nn/layers/feedForward.dml") as ff_pass
+
+s_ffPredict = function(List[unknown] model, Matrix[double] X, Integer batch_size = 128) 
+  return (Matrix[double] pred) {
+  
+  rows = nrow(X)
+  out = as.matrix(model["W2"])
+  cols = ncol(out)
+  pred = matrix(0, rows, cols)
+  
+  iters = ceil(rows / batch_size)
+
+  batch = batch_size
+  for(i in 1:iters) {
+    begin = (i-1)*batch+1
+    end = min(rows, begin + batch - 1)
+    X_batch = X[begin:end,]
+    output = ff_pass::feedForward(X_batch, model, TRUE)
+    pred[begin:end,] = as.matrix(output[length(output)])
+  }
+}

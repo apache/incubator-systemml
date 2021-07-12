@@ -39,6 +39,8 @@ limitations under the License.
     * [`dist`-Function](#dist-function)
     * [`dmv`-Function](#dmv-function)
     * [`ema`-Function](#ema-function)
+    * [`ffPredict`-Function](#ffPredict-function)
+    * [`ffTrain`-Function](#ffTrain-function)
     * [`gaussianClassifier`-Function](#gaussianClassifier-function)
     * [`glm`-Function](#glm-function)
     * [`gmm`-Function](#gmm-function)
@@ -553,6 +555,96 @@ Z = dmv(X=A)
 Z = dmv(X=A, threshold=0.9)
 Z = dmv(X=A, threshold=0.9, replace="NaN")
 ```
+
+## `ffPredict`-Function
+
+The `ffPredict`-function computes prediction of the given thata using trained model.
+
+It takes the list of layers returned by the `ffTrain`-function.
+
+### Usage
+
+```r
+prediction = ffPredict(model, x_test, 128)
+```
+
+### Arguments
+
+| Name        | Type           | Default  | Description |
+| :---        | :------------- | :------- | :---------- |
+| Model       | List[unknown]  | required | ffTrain model |
+| X           | Matrix[Double] | required | Data for making prediction |
+| batch_size  | Integer        | 128      | Batch Size |
+
+### Returns
+
+| Name | Type           | Description      |
+| :--- | :------------- | :--------------- |
+| pred | Matrix[Double] | Predictions |
+
+### Example
+
+```r
+
+model = ffTrain(x_train, y_train, 128, 10, 0.001, ...)
+
+prediction = ffPredict(model=model, X=x_test)
+```
+
+## `ffTrain`-Function
+
+The `ffTrain`-function trains simple feed-forward neural network.
+
+Neural network trained has the following architecture:
+```r
+affine1 -> relu -> dropout -> affine2 -> configurable output layer activation
+```
+Hidden layer has 128 neurons. Dropout rate is 0.35. Input and ouptut sizes are inferred from X and Y.
+### Usage
+```r
+model = ffTrain(X=x_train, Y=y_train, out_activation="sigmoid", loss_fcn="cel")
+```
+
+### Arguments
+
+| Name             | Type           | Default  | Description |
+| :---             | :------------- | :------- | :---------- |
+| X                | Matrix[Double] | required | Training data |
+| Y                | Matrix[Double] | required | Labels/Target values |
+| batch_size       | Integer        | 64       | Batch size |
+| epochs           | Integer        | 20       | Number of epochs |
+| learning_rate    | Double         | 0.003    | Learning rate |
+| out_activation   | String         | required | User specified ouptut layer activation |
+| loss_fcn         | String         | required | User specified loss function |
+| shuffle          | Boolean        | False    | Shuffle dataset|
+| validation_split | Double         | 0.0      | Fraction of dataset to be used as validation set|
+| seed             | Integer        | -1       | Seed for model initialization |
+| verbose          | Boolean        | False    | Flag that indicates if function should print to stdout |
+
+User can specify following output layer activations:
+`sigmoid`, `relu`, `lrelu`, `tanh`, `softmax`, `logits` (no activation).
+
+User can specify following loss functions:
+`l1`, `l2`, `log_loss`, `logcosh_loss`, `cel` (cross-entropy loss).
+
+When validation set is used function outputs validation loss to the stdout after each epoch.
+
+
+### Returns
+
+| Name | Type           | Description      |
+| :--- | :------------- | :--------------- |
+| model| List[unknown] | Trained model containing weights of affine layers and activation of output layer |
+
+### Example
+
+```r
+
+model = ffTrain(X=x_train, Y=y_train, batch_size=128, epochs=10, learning_rate=0.001, out_activation="sigmoid", loss_fcn="cel", shuffle=TRUE, validation_split=0.2, verbose=TRUE)
+
+prediction = ffPredict(model=model, X=x_train)
+```
+
 
 
 ## `gaussianClassifier`-Function

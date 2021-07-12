@@ -1,0 +1,84 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+
+# Generates sample images for a GAN model and reports discriminator accuracy.
+# Can be called with either 'simple' or 'cnn' for GAN a model with affine layers only or a model using cnn
+# respectively.
+# This file is called by GanTest.java
+
+source("src/test/scripts/applications/GAN/GAN_cnn.dml") as GANC
+source("src/test/scripts/applications/GAN/GAN_simple.dml") as GANS
+
+train = read("scripts/nn/examples/data/mnist/mnist_train.csv", format="csv")
+test = read("scripts/nn/examples/data/mnist/mnist_test.csv", format="csv")
+out_dir = $2
+
+X_train = train[,2:ncol(train)] / 127.5 - 1
+X_test = test[,2:ncol(test)] / 127.5 - 1
+
+# amount of samples to be generated
+amount = 10
+
+# generate fake images
+if($1 == 'cnn')
+{
+    [GW1, Gb1, GW2, Gb2, GW3, Gb3, GW4, Gb4, DW1, Db1, DW2, Db2, DW3, Db3] = GANC::train(X_train, 2500)
+    fake = GANC::generate(amount, GW1, Gb1, GW2, Gb2, GW3, Gb3, GW4, Gb4)
+}
+else if($1 == 'simple')
+{
+    [GW1, Gb1, GW2, Gb2, DW1, Db1, DW2, Db2] = GANS::train(X_train, 5000)
+    fake = GANS::generate(amount, GW1, Gb1, GW2, Gb2)
+}
+
+# draw amount real images randomly
+rand = sample(nrow(X_test), amount)
+real = matrix(0, amount, 784)
+for(r in 1:amount)
+{
+    real[r,] = X_test[as.scalar(rand[r]),]
+}
+
+# create labels
+images = rbind(fake, real)
+labels_fake = matrix(0, amount, 1)
+labels_real = matrix(1, amount, 1)
+labels = rbind(labels_fake, labels_real)
+
+# get prediction
+if($1 == 'cnn')
+{
+    predicted = GANC::eval(images, DW1, Db1, DW2, Db2, DW3, Db3)
+}
+else if($1 == 'simple')
+{
+    predicted = GANS::eval(images, DW1, Db1, DW2, Db2)
+}
+
+correct_pred = (round(predicted) == labels)
+accuracy = mean(correct_pred)
+print("accuracy: " + accuracy)
+
+fake = 0.5 * fake + 0.5
+
+write(accuracy, out_dir+"/accuracy", format="text")
+#write(fake, out_dir+"/generated")
+#write(real, out_dir+"/compare")

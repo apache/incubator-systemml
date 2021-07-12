@@ -1,0 +1,358 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+
+source("nn/layers/affine.dml") as affine
+source("nn/layers/leaky_relu.dml") as leaky_relu
+source("nn/layers/log_loss.dml") as log_loss
+source("nn/layers/softmax.dml") as softmax
+source("nn/layers/sigmoid.dml") as sigmoid
+source("nn/layers/tanh.dml") as tanh
+source("nn/optim/adam.dml") as adam
+
+train = function(matrix[double] X, int iterations)
+    return (matrix[double] GW_1, matrix[double] Gb_1, matrix[double] GW_2, matrix[double] Gb_2, matrix[double] DW_1,
+            matrix[double] Db_1, matrix[double] DW_2, matrix[double] Db_2)
+{
+/*
+   * Trains the generator and the discriminator of the GAN.
+   *
+   * The input matrix, X, has N examples, each with 784 features.
+   *
+   * Inputs:
+   *  - X: Input data matrix, of shape (N, 784).
+   *  - iterations: number of iterations for training
+   *
+   * Outputs:
+   *  - GW_1: Generator 1st layer weights (parameters) matrix, of shape (100, 128).
+   *  - Gb_1: Generator 1st layer biases vector, of shape (1, 128).
+   *  - GW_2: Generator 2nd layer weights (parameters) matrix, of shape (128, 784).
+   *  - Gb_2: Generator 2st layer biases vector, of shape (1, 784).
+   *  - DW_1: Discriminator 1st layer weights (parameters) matrix, of shape (784, 128).
+   *  - Db_1: Discriminator 1st layer biases vector, of shape (1, 128).
+   *  - DW_2: Discriminator 2nd layer weights (parameters) matrix, of shape (128, 1).
+   *  - Db_2: Discriminator 2nd layer biases vector, of shape (1, 1).
+*/
+    N = nrow(X)
+    batch_size = 128
+    half_batch = batch_size / 2
+
+    #Define Generator:
+    [GW_1, Gb_1] = affine::init(100, 128, -1)
+    [GW_2, Gb_2] = affine::init(128, 28*28, -1)
+    [mGW_1, vGW_1] = adam::init(GW_1)
+    [mGb_1, vGb_1] = adam::init(Gb_1)
+    [mGW_2, vGW_2] = adam::init(GW_2)
+    [mGb_2, vGb_2] = adam::init(Gb_2)
+
+    gen_model = list(GW_1, Gb_1, GW_2, Gb_2)
+    gen_grad = list(mGW_1, vGW_1, mGb_1, vGb_1, mGW_2, vGW_2, mGb_2, vGb_2)
+
+    #Define Discriminator:
+    [DW_1, Db_1] = affine::init(28*28, 128, -1)
+    [DW_2, Db_2] = affine::init(128, 1, -1)
+    [mDW_1, vDW_1] = adam::init(DW_1)
+    [mDb_1, vDb_1] = adam::init(Db_1)
+    [mDW_2, vDW_2] = adam::init(DW_2)
+    [mDb_2, vDb_2] = adam::init(Db_2)
+
+    disc_model = list(DW_1, Db_1, DW_2, Db_2)
+    disc_grad = list(mDW_1, vDW_1, mDb_1, vDb_1, mDW_2, vDW_2, mDb_2, vDb_2)
+
+    fake = matrix(0, 0, 784)
+
+    for(i in 1:iterations)
+    {
+        print('step ' + toString(i) + ' / ' + toString(iterations))
+        #generate samples
+        noise = rand(rows = half_batch, cols = 100, min = 0.0, max = 1.0)
+        [fake_images, gen_params] = gen_forward(noise, gen_model)
+        rand = sample(N, half_batch)
+        real_images = matrix(0, half_batch, 784)
+        for(r in 1:half_batch)
+        {
+            real_images[r,] = X[as.scalar(rand[r]),]
+        }
+
+        #train discriminator
+        [decision, disc_params] = disc_forward(real_images, disc_model)
+        targets = matrix(1, half_batch, 1)
+        dloss1 = log_loss::forward(decision, targets)
+        [dX, disc_model, disc_grad] = disc_backward(decision, targets, FALSE, i, disc_model, disc_grad, disc_params)
+        [decision, disc_params] = disc_forward(fake_images, disc_model)
+        targets = matrix(0, half_batch, 1)
+        dloss2 = log_loss::forward(decision, targets)
+        [dX, disc_model, disc_grad] = disc_backward(decision, targets, FALSE, i, disc_model, disc_grad, disc_params)
+        print('discriminator_loss: ' + toString((dloss1 + dloss2)))
+
+        #generate samples
+        noise = rand(rows = batch_size, cols = 100, min = 0.0, max = 1.0)
+        [fake_images, gen_params] = gen_forward(noise, gen_model)
+
+        #train generator
+        [decision, disc_params] = disc_forward(fake_images, disc_model)
+        targets = matrix(1, batch_size, 1)
+        gloss = log_loss::forward(decision, targets)
+        [dX, disc_model, disc_grad] = disc_backward(decision, targets, TRUE, i, disc_model, disc_grad, disc_params)
+        [gen_model, gen_grad] = gen_backward(dX, i, gen_model, gen_grad, gen_params)
+        print('generator_loss: ' + toString(gloss))
+
+        # get sample generated image to observe evolution of generated images
+        if(i %% (iterations/10) == 0)
+        {
+            fake = rbind(fake, fake_images[1])
+        }
+    }
+    out_dir = "target/testTemp/applications/GAN/GANTest/"
+    fake = 0.5 * fake + 0.5
+    write(fake, out_dir+"/evo")
+    DW_1 = as.matrix(disc_model[1])
+    Db_1 = as.matrix(disc_model[2])
+    DW_2 = as.matrix(disc_model[3])
+    Db_2 = as.matrix(disc_model[4])
+    GW_1 = as.matrix(gen_model[1])
+    Gb_1 = as.matrix(gen_model[2])
+    GW_2 = as.matrix(gen_model[3])
+    Gb_2 = as.matrix(gen_model[4])
+}
+
+gen_forward = function(matrix[double] noise, list[unknown] model)
+    return(matrix[double] images, list[unknown] params)
+{
+/*
+   * Computes the forward pass of the generator.
+   * Generates fake images from input noise.
+   *
+   * Inputs:
+   *  - noise: Randomly generated noise, of shape (N, 100).
+   *  - model: List containing the generator weights and biases.
+   *
+   * Outputs:
+   *  - images: Generated images, of shape (N, 784).
+   *  - params: List of outputs of the generator layers, needed for backward pass.
+*/
+    GW_1 = as.matrix(model[1])
+    Gb_1 = as.matrix(model[2])
+    GW_2 = as.matrix(model[3])
+    Gb_2 = as.matrix(model[4])
+
+    #Generator forward:
+    #Layer 1
+    out_1G = affine::forward(noise, GW_1, Gb_1)
+    out_1G_leaky_relu = leaky_relu::forward(out_1G)
+    #Layer 2
+    out_2G = affine::forward(out_1G_leaky_relu, GW_2, Gb_2)
+    out_2G_tanh = tanh::forward(out_2G)
+    images = out_2G_tanh
+    params = list(noise, out_1G, out_1G_leaky_relu, out_2G)
+}
+
+disc_forward = function(matrix[double] X, list[unknown] model)
+    return(matrix[double] decision, list[unknown] params)
+{
+/*
+   * Computes the forward pass of the discriminator.
+   * Decides if input images are real or fake.
+   *
+   * Inputs:
+   *  - X: Input matrix containing sample images, of shape (N, 784).
+   *  - model: List containing the discriminator weights and biases.
+   *
+   * Outputs:
+   *  - decision: Decisions for realness of input, of shape (N, 1).
+   *  - params: List of outputs of the discriminator layers, needed for backward pass.
+*/
+    DW_1 = as.matrix(model[1])
+    Db_1 = as.matrix(model[2])
+    DW_2 = as.matrix(model[3])
+    Db_2 = as.matrix(model[4])
+
+    #Discriminator forward
+    #Layer 1
+    out_1D = affine::forward(X, DW_1, Db_1)
+    out_1D_leaky_relu = leaky_relu::forward(out_1D)
+
+    #Layer 2
+    out_2D = affine::forward(out_1D_leaky_relu, DW_2, Db_2)
+    decision = sigmoid::forward(out_2D)
+    params = list(X, out_1D, out_1D_leaky_relu, out_2D)
+}
+
+disc_backward = function(matrix[double] decision, matrix[double] targets, boolean lock, int iteration, list[unknown] model, list[unknown] gradients,
+                         list[unknown] params)
+    return(matrix[double] dX, list[unknown] model, list[unknown] gradients)
+{
+/*
+   * Computes the backward pass of the discriminator.
+   * Updates gradients and weights of the discriminator.
+   *
+   * Inputs:
+   *  - decisions: Input matrix containing discriminator decisions, of shape (N, 1).
+   *  - targets: Target values for the decisions, of shape (N, 1).
+   *  - lock: Boolean that governs if discriminator weights are to be updated, TRUE means the weights are not updated.
+   *  - iteration: Current iteration of the training.
+   *  - model: List containing the discriminator weights and biases.
+   *  - gradients: List containing the discriminator gradients.
+   *  - params: List of outputs of the discriminator layers from the forward pass.
+   *
+   * Outputs:
+   *  - dX: Gradient wrt `X`, of shape (N, 784).
+   *  - model: List containing the updated discriminator weights and biases.
+   *  - gradients: List containing the updated discriminator gradients.
+*/
+    lr = 0.0002
+    beta1 = 0.5
+    beta2 = 0.999
+    epsilon = 1e-07
+
+    DW_1 = as.matrix(model[1])
+    Db_1 = as.matrix(model[2])
+    DW_2 = as.matrix(model[3])
+    Db_2 = as.matrix(model[4])
+
+    mDW_1 = as.matrix(gradients[1])
+    vDW_1 = as.matrix(gradients[2])
+    mDb_1 = as.matrix(gradients[3])
+    vDb_1 = as.matrix(gradients[4])
+    mDW_2 = as.matrix(gradients[5])
+    vDW_2 = as.matrix(gradients[6])
+    mDb_2 = as.matrix(gradients[7])
+    vDb_2 = as.matrix(gradients[8])
+
+    #Discriminator backward
+    #Layer 2
+    dloss = log_loss::backward(decision, targets)
+    dout_2D = sigmoid::backward(dloss, as.matrix(params[4]))
+    [dout_1D, dDW_2, dDb_2] = affine::backward(dout_2D, as.matrix(params[3]), DW_2, Db_2)
+
+    #Layer 1
+    dout_1D_leaky_relu = leaky_relu::backward(dout_1D, as.matrix(params[2]))
+    [dX, dDW_1, dDb_1] = affine::backward(dout_1D_leaky_relu, as.matrix(params[1]), DW_1, Db_1)
+
+    if(!lock)
+    {
+        #optimize
+        [DW_1, mDW_1, vDW_1] = adam::update(DW_1, dDW_1, lr, beta1, beta2, epsilon, iteration, mDW_1, vDW_1)
+        [Db_1, mDb_1, vDb_1] = adam::update(Db_1, dDb_1, lr, beta1, beta2, epsilon, iteration, mDb_1, vDb_1)
+        [DW_2, mDW_2, vDW_2] = adam::update(DW_2, dDW_2, lr, beta1, beta2, epsilon, iteration, mDW_2, vDW_2)
+        [Db_2, mDb_2, vDb_2] = adam::update(Db_2, dDb_2, lr, beta1, beta2, epsilon, iteration, mDb_2, vDb_2)
+        model = list(DW_1, Db_1, DW_2, Db_2)
+        gradients = list(mDW_1, vDW_1, mDb_1, vDb_1, mDW_2, vDW_2, mDb_2, vDb_2)
+    }
+}
+
+gen_backward = function(matrix[double] dX, int iteration, list[unknown] model, list[unknown] gradients, list[unknown] params)
+    return(list[unknown] model, list[unknown] gradients)
+{
+/*
+   * Computes the backward pass of the generator.
+   * Updates gradients and weights of the generator.
+   *
+   * Inputs:
+   *  - dX: Gradient wrt `X`, of shape (N, 784).
+   *  - iteration: Current iteration of the training.
+   *  - model: List containing the generator weights and biases.
+   *  - gradients: List containing the generator gradients.
+   *  - params: List of outputs of the generator layers from the forward pass.
+   *
+   * Outputs:
+   *  - model: List containing the updated generator weights and biases.
+   *  - gradients: List containing the updated generator gradients.
+*/
+    lr = 0.0002
+    beta1 = 0.5
+    beta2 = 0.999
+    epsilon = 1e-07
+
+    GW_1 = as.matrix(model[1])
+    Gb_1 = as.matrix(model[2])
+    GW_2 = as.matrix(model[3])
+    Gb_2 = as.matrix(model[4])
+
+    mGW_1 = as.matrix(gradients[1])
+    vGW_1 = as.matrix(gradients[2])
+    mGb_1 = as.matrix(gradients[3])
+    vGb_1 = as.matrix(gradients[4])
+    mGW_2 = as.matrix(gradients[5])
+    vGW_2 = as.matrix(gradients[6])
+    mGb_2 = as.matrix(gradients[7])
+    vGb_2 = as.matrix(gradients[8])
+
+    #Layer 2
+    dout_2G_tanh = tanh::backward(dX, as.matrix(params[4]))
+    [dout_2G, dGW_2, dGb_2] = affine::backward(dout_2G_tanh, as.matrix(params[3]), GW_2, Gb_2)
+
+    #Layer 1
+    dout_1G_leaky_relu = leaky_relu::backward(dout_2G, as.matrix(params[2]))
+    [dout_1G, dGW_1, dGb_1] = affine::backward(dout_1G_leaky_relu, as.matrix(params[1]), GW_1, Gb_1)
+
+    #optimize
+    [GW_1, mGW_1, vGW_1] = adam::update(GW_1, dGW_1, lr, beta1, beta2, epsilon, iteration, mGW_1, vGW_1)
+    [Gb_1, mGb_1, vGb_1] = adam::update(Gb_1, dGb_1, lr, beta1, beta2, epsilon, iteration, mGb_1, vGb_1)
+    [GW_2, mGW_2, vGW_2] = adam::update(GW_2, dGW_2, lr, beta1, beta2, epsilon, iteration, mGW_2, vGW_2)
+    [Gb_2, mGb_2, vGb_2] = adam::update(Gb_2, dGb_2, lr, beta1, beta2, epsilon, iteration, mGb_2, vGb_2)
+
+    model = list(GW_1, Gb_1, GW_2, Gb_2)
+    gradients = list(mGW_1, vGW_1, mGb_1, vGb_1, mGW_2, vGW_2, mGb_2, vGb_2)
+}
+
+generate = function(int amount, matrix[double] GW_1, matrix[double] Gb_1, matrix[double] GW_2, matrix[double] Gb_2)
+    return(matrix[double] images)
+{
+/*
+   * Generates amount images from random noise.
+   *
+   *
+   * Inputs:
+   *  - amount: Amount of images to be generated.
+   *  - GW_1: Generator 1st layer weights (parameters) matrix, of shape (100, 128).
+   *  - Gb_1: Generator 1st layer biases vector, of shape (1, 128).
+   *  - GW_2: Generator 2nd layer weights (parameters) matrix, of shape (128, 784).
+   *  - Gb_2: Generator 2st layer biases vector, of shape (1, 784).
+   *
+   * Outputs:
+   *  - images: Matrix of generated images, of shape (amount, D).
+*/
+
+    noise = rand(rows = amount, cols = 100, min = 0.0, max = 1.0)
+    [images, params] = gen_forward(noise, list(GW_1, Gb_1, GW_2, Gb_2))
+}
+
+eval = function(matrix[double] images, matrix[double] DW_1, matrix[double] Db_1, matrix[double] DW_2, matrix[double] Db_2)
+    return(matrix[double] decision)
+{
+/*
+   * Predicts if set of input images is real or fake.
+   *
+   *
+   * Inputs:
+   *  - images: Matrix of sample images of  shape (N, D).
+   *  - DW_1: Discriminator 1st layer weights (parameters) matrix, of shape (784, 128).
+   *  - Db_1: Discriminator 1st layer biases vector, of shape (1, 128).
+   *  - DW_2: Discriminator 2nd layer weights (parameters) matrix, of shape (128, 1).
+   *  - Db_2: Discriminator 2nd layer biases vector, of shape (1, 1).
+   *
+   * Outputs:
+   *  - prediction: Matrix of predictions, of shape (N, 1).
+*/
+
+    [decision, disc_params] = disc_forward(images, list(DW_1, Db_1, DW_2, Db_2))
+}
+

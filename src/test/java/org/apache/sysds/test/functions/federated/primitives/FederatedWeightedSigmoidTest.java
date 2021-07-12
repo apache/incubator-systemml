@@ -48,7 +48,7 @@ public class FederatedWeightedSigmoidTest extends AutomatedTestBase {
 
 	private final static String OUTPUT_NAME = "Z";
 
-	private final static double TOLERANCE = 0;
+	private final static double TOLERANCE = 1e-14;
 
 	private final static int BLOCKSIZE = 1024;
 

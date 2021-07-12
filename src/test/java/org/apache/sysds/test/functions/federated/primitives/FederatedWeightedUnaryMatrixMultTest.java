@@ -77,7 +77,7 @@ public class FederatedWeightedUnaryMatrixMultTest extends AutomatedTestBase
 		return Arrays.asList(new Object[][] {
 			// {rows, cols, rank, sparsity}
 			{1202, 1003, 5, 0.001},
-			{1202, 1003, 5, 0.6}
+			{1202, 1003, 5, 0.7}
 		});
 	}
 
@@ -106,10 +106,10 @@ public class FederatedWeightedUnaryMatrixMultTest extends AutomatedTestBase
 		federatedWeightedUnaryMatrixMult(EXP_DIV_TEST_NAME, ExecMode.SPARK);
 	}
 
-	@Test
-	public void federatedWeightedUnaryMatrixMultPow2SingleNode() {
-		federatedWeightedUnaryMatrixMult(POW_2_TEST_NAME, ExecMode.SINGLE_NODE);
-	}
+	// @Test
+	// public void federatedWeightedUnaryMatrixMultPow2SingleNode() {
+	// 	federatedWeightedUnaryMatrixMult(POW_2_TEST_NAME, ExecMode.SINGLE_NODE);
+	// }
 
 	// @Test
 	// public void federatedWeightedUnaryMatrixMultPow2Spark() {

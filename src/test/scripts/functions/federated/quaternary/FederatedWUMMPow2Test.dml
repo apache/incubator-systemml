@@ -38,8 +38,6 @@ while(FALSE) { }
 Z3 = X / (V %*% t(U))^2;
 while(FALSE) { }
 
-print("XX "+mean(Z3))
 Z = Z1 + Z2 + mean(Z3);
 
-print("XXX "+as.scalar(Z[1,1]))
 write(Z, $out_Z);

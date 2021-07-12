@@ -20,15 +20,12 @@
 package org.apache.sysds.runtime.instructions.fed;
 
 import java.util.ArrayList;
-import java.util.concurrent.Future;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysds.runtime.controlprogram.federated.FederatedRequest;
-import org.apache.sysds.runtime.controlprogram.federated.FederatedRequest.RequestType;
-import org.apache.sysds.runtime.controlprogram.federated.FederatedResponse;
 import org.apache.sysds.runtime.controlprogram.federated.FederationMap;
 import org.apache.sysds.runtime.controlprogram.federated.FederationMap.AlignType;
 import org.apache.sysds.runtime.controlprogram.federated.FederationMap.FType;
@@ -101,25 +98,27 @@ public class QuaternaryWSigmoidFEDInstruction extends QuaternaryFEDInstruction {
 			FederatedRequest frComp = FederationUtils.callInstruction(instString,
 				output, new CPOperand[] {input1, input2, input3}, varNewIn);
 
-			// get partial results from federated workers
-			FederatedRequest frGet = new FederatedRequest(RequestType.GET_VAR, frComp.getID());
-
 			ArrayList<FederatedRequest> frC = new ArrayList<>();
-			frC.add(fedMap.cleanup(getTID(), frComp.getID()));
 			if(frSliced != null)
 				frC.add(fedMap.cleanup(getTID(), frSliced[0].getID()));
 			frC.add(fedMap.cleanup(getTID(), frB.getID()));
 
-			FederatedRequest[] frAll = ArrayUtils.addAll(new FederatedRequest[]{frB, frComp, frGet},
+			FederatedRequest[] frAll = ArrayUtils.addAll(new FederatedRequest[]{frB, frComp},
 				frC.toArray(new FederatedRequest[0]));
 
 			// execute federated instructions
-			Future<FederatedResponse>[] response = frSliced != null ?
-				fedMap.execute(getTID(), true, frSliced, frAll)
-				: fedMap.execute(getTID(), true, frAll);
+			if(frSliced == null)
+				fedMap.execute(getTID(), true, frAll);
+			else
+				fedMap.execute(getTID(), true, frSliced, frAll);
 
-			// bind partial results from federated responses
-			ec.setMatrixOutput(output.getName(), FederationUtils.bind(response, X.isFederated(FType.COL)));
+			long rows = X.getNumRows() > 1 ? X.getNumRows() : U.getNumRows();
+			long cols = X.getNumColumns() > 1 ? X.getNumColumns()
+				: (U.getNumColumns() == V.getNumRows() ? V.getNumColumns() : V.getNumRows());
+			// derive output federated mapping
+			MatrixObject out = ec.getMatrixObject(output);
+			out.getDataCharacteristics().set(rows, cols, (int) X.getBlocksize());
+			out.setFedMapping(fedMap.copyWithNewID(frComp.getID()));
 		}
 		else {
 			throw new DMLRuntimeException("Unsupported federated inputs (X, U, V) = (" 

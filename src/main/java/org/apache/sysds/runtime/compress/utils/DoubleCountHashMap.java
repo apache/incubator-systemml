@@ -183,25 +183,6 @@ public class DoubleCountHashMap {
 		}
 	}
 
-	public class DCounts {
-		public double key = Double.MAX_VALUE;
-		public int count;
-
-		public DCounts(double key) {
-			this.key = key;
-			count = 1;
-		}
-
-		public void inc() {
-			count++;
-		}
-
-		@Override
-		public String toString() {
-			return "[" + key + ", " + count + "]";
-		}
-	}
-
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();

@@ -30,7 +30,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
-import org.apache.commons.lang.NotImplementedException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.runtime.DMLRuntimeException;
@@ -52,9 +51,9 @@ import org.apache.sysds.runtime.compress.estim.CompressedSizeInfo;
 import org.apache.sysds.runtime.compress.estim.CompressedSizeInfoColGroup;
 import org.apache.sysds.runtime.compress.lib.BitmapEncoder;
 import org.apache.sysds.runtime.compress.utils.ABitmap;
+import org.apache.sysds.runtime.compress.utils.DCounts;
 import org.apache.sysds.runtime.compress.utils.DblArrayIntListHashMap;
 import org.apache.sysds.runtime.compress.utils.DoubleCountHashMap;
-import org.apache.sysds.runtime.compress.utils.DoubleCountHashMap.DCounts;
 import org.apache.sysds.runtime.compress.utils.IntArrayList;
 import org.apache.sysds.runtime.data.SparseBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
@@ -85,28 +84,165 @@ public final class ColGroupFactory {
 			return compressColGroupsParallel(in, csi, compSettings, k);
 	}
 
-	public static List<AColGroup> compressColGroupsRowBased(MatrixBlock in, CompressedSizeInfo csi,
-		CompressionSettings cs, int k) {
-		return compressColGroupsRowBasedSingleThread(in, csi, cs);
-	}
+	// public static List<AColGroup> compressColGroupsRowBased(MatrixBlock in, CompressedSizeInfo csi,
+	// 	CompressionSettings cs, int k) {
+	// 	return compressColGroupsRowBasedSingleThread(in, csi, cs);
+	// }
 
-	private static List<AColGroup> compressColGroupsRowBasedSingleThread(MatrixBlock in, CompressedSizeInfo csi,
-		CompressionSettings cs) {
-		throw new NotImplementedException();
-	}
+	// private static List<AColGroup> compressColGroupsRowBasedSingleThread(MatrixBlock in, CompressedSizeInfo csi,
+	// 	CompressionSettings cs) {
+	// 	throw new NotImplementedException();
+	// }
 
 	private static List<AColGroup> compressColGroupsSingleThreaded(MatrixBlock in, CompressedSizeInfo csi,
 		CompressionSettings compSettings) {
 		List<AColGroup> ret = new ArrayList<>(csi.getNumberColGroups());
 		List<CompressedSizeInfoColGroup> groups = csi.getInfo();
 
-		Collections.sort(groups, Comparator.comparing(g -> -g.getNumVals()));
-		Tmp tmpMap = new Tmp();
-		for(CompressedSizeInfoColGroup g : groups)
-			ret.addAll(compressColGroup(in, compSettings, tmpMap, g));
+		// Collections.sort(groups, Comparator.comparing(g -> -g.getNumVals()));
+		// if(!compSettings.transposed) {
+		// 	List<CompressedSizeInfoColGroup> singleGroups = new ArrayList<>();
+		// 	Tmp tmpMap = new Tmp();
+		// 	for(CompressedSizeInfoColGroup g : groups)
+		// 		if(g.getColumns().length > 1)
+		// 			ret.addAll(compressColGroup(in, compSettings, tmpMap, g));
+		// 		else
+		// 			singleGroups.add(g);
+		// 	final int blockSize = 128;
+		// 	final DoubleDummyCodingMap[] maps = new DoubleDummyCodingMap[Math.min(blockSize, singleGroups.size())];
+		// 	final int[] indexMap = new int[in.getNumColumns()];
+		// 	for(int i = 0; i < blockSize && i < singleGroups.size(); i++)
+		// 		maps[i] = new DoubleDummyCodingMap(singleGroups.get(i).getNumVals());
+		// 	for(int i = 0; i < singleGroups.size(); i += blockSize) {
+		// 		List<CompressedSizeInfoColGroup> block = new ArrayList<>();
+		// 		if(i > 0)
+		// 			for(DoubleDummyCodingMap m : maps)
+		// 				m.reset();
+		// 		for(int j = i; j < Math.min(singleGroups.size(), i + blockSize); j++)
+		// 			block.add(singleGroups.get(j));
+
+		// 		Arrays.fill(indexMap, -1);
+		// 		int idx = 0;
+		// 		int maxCol = 0;
+		// 		for(CompressedSizeInfoColGroup g : block) {
+		// 			int col = g.getColumns()[0];
+		// 			indexMap[col] = idx++;
+		// 			maxCol = Math.max(col, maxCol);
+		// 		}
+		// 		ret.addAll(compressSingleColGroupsSequentialRead(in, compSettings, block, maps, indexMap, maxCol));
+		// 	}
+		// }
+		// else {
+			Tmp tmpMap = new Tmp();
+			for(CompressedSizeInfoColGroup g : groups)
+				ret.addAll(compressColGroup(in, compSettings, tmpMap, g));
+		// }
 
 		return ret;
 	}
+
+	// private static List<AColGroup> compressSingleColGroupsSequentialRead(MatrixBlock in, CompressionSettings cs,
+	// 	List<CompressedSizeInfoColGroup> groups, DoubleDummyCodingMap[] maps, int[] indexMap, int maxCol) {
+
+	// 	if(in.isInSparseFormat()) {
+	// 		final SparseBlock sb = in.getSparseBlock();
+	// 		for(int i = 0; i < in.getNumRows(); i++) { // for each row
+	// 			if(sb.isEmpty(i))
+	// 				continue;
+	// 			final int apos = sb.pos(i);
+	// 			final int alen = sb.size(i) + apos;
+	// 			final double[] avals = sb.values(i);
+	// 			final int[] aix = sb.indexes(i);
+	// 			for(int j = apos; j < alen && aix[j] <= maxCol; j++) {
+	// 				final int idx = indexMap[aix[j]];
+	// 				if(idx != -1)
+	// 					maps[idx].increment(avals[j]);
+	// 			}
+	// 		}
+	// 	}
+	// 	else {
+	// 		throw new NotImplementedException("not implemented dense");
+	// 	}
+
+	// 	RawColGroup[] raw = new RawColGroup[groups.size()];
+	// 	for(int i = 0; i < groups.size(); i++) 
+	// 		raw[i] = compress(in, maps[i], groups.get(i).getColumns());
+		
+
+	// 	if(in.isInSparseFormat()) {
+	// 		final SparseBlock sb = in.getSparseBlock();
+	// 		for(int i = 0; i < in.getNumRows(); i++) { // for each row
+	// 			if(sb.isEmpty(i))
+	// 				continue;
+	// 			final int apos = sb.pos(i);
+	// 			final int alen = sb.size(i) + apos;
+	// 			final double[] avals = sb.values(i);
+	// 			final int[] aix = sb.indexes(i);
+	// 			for(int j = apos; j < alen && aix[j] <= maxCol; j++) {
+	// 				final int idx = indexMap[aix[j]];
+	// 				if(idx != -1)
+	// 					raw[idx].data.set(i, raw[idx].m.get(avals[j]));
+	// 			}
+	// 		}
+	// 	}
+	// 	else {
+	// 		throw new NotImplementedException("not implemented dense");
+	// 	}
+	// 	List<AColGroup> ret = new ArrayList<>(groups.size());
+	// 	for(RawColGroup g : raw){
+	// 		if(g.dict == null){
+	// 			ret.add(new ColGroupEmpty(g.cols, in.getNumRows()));
+	// 		}else{
+	// 			ret.add(new ColGroupDDC(g.cols,in.getNumRows(), g.dict, g.data, g.counts));
+	// 		}
+	// 	}
+	// 	return ret;
+	// }
+
+	// private static RawColGroup compress(MatrixBlock in, DoubleDummyCodingMap m, int[] cols) {
+	// 	final int nRows = in.getNumRows();
+
+	// 	List<DCounts> entries = m.extractValues();
+	// 	Collections.sort(entries, Comparator.comparing(x -> -x.count));
+	// 	if(entries.size() == 0)
+	// 		return new RawColGroup(null, cols, null, null, null);
+
+	// 	double[] values = new double[entries.size() + 1];
+	// 	int[] counts = new int[entries.size() + 1];
+	// 	int sum = 0;
+	// 	for(int i = 0; i < entries.size(); i++) {
+	// 		DCounts x = entries.get(i);
+	// 		counts[i] = x.count;
+	// 		sum += x.count;
+	// 		values[i] = x.key;
+	// 		// Overwrite mapping id!
+	// 		x.count = i;
+	// 	}
+
+	// 	counts[entries.size()] = nRows - sum;
+	// 	ADictionary dict = new Dictionary(values);
+
+	// 	AMapToData mapToData = MapToFactory.create(nRows, entries.size() + 1);
+
+	// 	return new RawColGroup(dict,cols, counts, m, mapToData);
+
+	// }
+
+	// public static class RawColGroup {
+	// 	ADictionary dict;
+	// 	int[] cols;
+	// 	int[] counts;
+	// 	DoubleDummyCodingMap m;
+	// 	AMapToData data;
+
+	// 	public RawColGroup(ADictionary dict, int[] cols, int[] counts, DoubleDummyCodingMap m, AMapToData data) {
+	// 		this.dict = dict;
+	// 		this.cols = cols;
+	// 		this.counts = counts;
+	// 		this.m = m;
+	// 		this.data = data;
+	// 	}
+	// }
 
 	private static List<AColGroup> compressColGroupsParallel(MatrixBlock in, CompressedSizeInfo csi,
 		CompressionSettings compSettings, int k) {
@@ -487,19 +623,24 @@ public final class ColGroupFactory {
 			map.increment(vals[j]);
 		List<DCounts> entries = map.extractValues();
 		Collections.sort(entries, Comparator.comparing(x -> -x.count));
-		int[] counts = new int[entries.size()];
+		int[] counts = new int[entries.size() + 1];
+		int sum = 0;
 		double[] dict = new double[entries.size()];
 		for(int i = 0; i < entries.size(); i++) {
 			DCounts x = entries.get(i);
 			counts[i] = x.count;
+			sum += x.count;
 			dict[i] = x.key;
 			x.count = i;
 		}
+
+		counts[entries.size()] = nRows - sum;
+
 		AMapToData mapToData = MapToFactory.create((alen - apos), entries.size());
 		for(int j = apos; j < alen; j++)
 			mapToData.set(j - apos, map.get(vals[j]));
 
-		return new ColGroupSDCZeros(cols, nRows, new Dictionary(dict), offsets, mapToData, null);
+		return new ColGroupSDCZeros(cols, nRows, new Dictionary(dict), offsets, mapToData, counts);
 	}
 
 	protected static class Tmp {

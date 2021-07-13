@@ -250,10 +250,11 @@ public class CompressedMatrixBlockFactory {
 				break;
 			default:
 				if(mb.isInSparseFormat()) {
-					compSettings.transposed = false;
-					// boolean isAboveRowNumbers = mb.getNumRows() > 500000;
-					// boolean isAboveThreadToColumnRatio = coCodeColGroups.getNumberColGroups() > mb.getNumColumns() / 2;
-					// compSettings.transposed = isAboveRowNumbers || isAboveThreadToColumnRatio;
+					// compSettings.transposed = true;
+					// compSettings.transposed = false;
+					boolean isAboveRowNumbers = mb.getNumRows() > 500000;
+					boolean isAboveThreadToColumnRatio = coCodeColGroups.getNumberColGroups() > mb.getNumColumns() / 4;
+					compSettings.transposed = isAboveRowNumbers && isAboveThreadToColumnRatio;
 				}
 				else
 					compSettings.transposed = false;

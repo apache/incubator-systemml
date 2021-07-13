@@ -166,7 +166,7 @@ public class MetaDataAll extends DataIdentifier {
 			case DataExpression.READROWPARAM: _dim1 = (Integer) val; break;
 			case DataExpression.READCOLPARAM: _dim2 = (Integer) val; break;
 			case DataExpression.ROWBLOCKCOUNTPARAM: setBlocksize((Integer) val); break;
-			case DataExpression.READNNZPARAM: setNnz((Integer) val); break;
+			case DataExpression.READNNZPARAM: setNnz(val instanceof Long ? (Long) val : (Integer) val); break;
 			case DataExpression.FORMAT_TYPE: setFormatTypeString((String) val); break;
 			case DataExpression.DATATYPEPARAM: setDataType(Types.DataType.valueOf(((String) val).toUpperCase())); break;
 			case DataExpression.VALUETYPEPARAM: setValueType(Types.ValueType.fromExternalString((String) val)); break;

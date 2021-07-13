@@ -33,6 +33,9 @@ public class DMLCompressionStatistics {
 	private static int DecompressMTCount = 0;
 	private static double DecompressMT = 0.0;
 
+	private static int DecompressSparkCount = 0;
+	private static int DecompressCacheCount = 0;
+
 	public static void reset() {
 		Phase0 = 0.0;
 		Phase1 = 0.0;
@@ -44,6 +47,8 @@ public class DMLCompressionStatistics {
 		DecompressST = 0.0;
 		DecompressMTCount = 0;
 		DecompressMT = 0.0;
+		DecompressSparkCount = 0;
+		DecompressCacheCount = 0;
 	}
 
 	public static boolean haveCompressed(){
@@ -85,12 +90,16 @@ public class DMLCompressionStatistics {
 		}
 	}
 
-	public static int getDecompressionCount() {
-		return DecompressMTCount;
+	public static void addDecompressSparkCount(){
+		DecompressSTCount++;
 	}
 
-	public static int getDecompressionSTCount() {
-		return DecompressSTCount;
+	public static void addDecompressCacheCount(){
+		DecompressCacheCount++;
+	}
+
+	public static int getDecompressionCount() {
+		return DecompressMTCount + DecompressSTCount + DecompressSparkCount + DecompressCacheCount;
 	}
 
 	public static void display(StringBuilder sb) {
@@ -102,9 +111,11 @@ public class DMLCompressionStatistics {
 				Phase3 / 1000,
 				Phase4 / 1000,
 				Phase5 / 1000));
-			sb.append(String.format("Decompression Counts (Single , Multi) thread                     :\t%d/%d\n",
+			sb.append(String.format("Decompression Counts (Single , Multi, Spark, Cache) thread       :\t%d/%d/%d/%d\n",
 				DecompressSTCount,
-				DecompressMTCount));
+				DecompressMTCount,
+				DecompressSparkCount,
+				DecompressCacheCount));
 			sb.append(String.format("Dedicated Decompression Time (Single , Multi) thread             :\t%.3f/%.3f\n",
 				DecompressST / 1000,
 				DecompressMT / 1000));

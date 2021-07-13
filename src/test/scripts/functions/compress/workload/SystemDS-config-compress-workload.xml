@@ -19,6 +19,7 @@
 
 <root>
 	<sysds.compressed.linalg>workload</sysds.compressed.linalg>
+    <sysds.defaultblocksize>8000</sysds.defaultblocksize>
 	<sysds.cp.parallel.ops>true</sysds.cp.parallel.ops>
 	<sysds.scratch>target/force_comp_scratch_space</sysds.scratch>
 </root>

@@ -62,6 +62,13 @@ public class SparseBlockCSR extends SparseBlock
 		_values = new double[capacity];
 		_size = 0;
 	}
+
+	public SparseBlockCSR(int rlen, int capacity, int size){
+		_ptr = new int[rlen+1]; //ix0=0
+		_indexes = new int[capacity];
+		_values = new double[capacity];
+		_size = size;
+	}
 	
 	public SparseBlockCSR(int[] rowPtr, int[] colInd, double[] values, int nnz){
 		_ptr = rowPtr;

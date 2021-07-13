@@ -127,9 +127,7 @@ public class CompressInstructionRewrite extends AutomatedTestBase {
 			if(LOG.isDebugEnabled())
 				LOG.debug(stdout);
 
-			int decompressCount = 0;
-			decompressCount += DMLCompressionStatistics.getDecompressionCount();
-			decompressCount += DMLCompressionStatistics.getDecompressionSTCount();
+			int decompressCount = DMLCompressionStatistics.getDecompressionCount();
 			long compressionCount = Statistics.getCPHeavyHitterCount("compress");
 
 			Assert.assertEquals(compressionCountsExpected, compressionCount);

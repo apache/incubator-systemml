@@ -27,7 +27,7 @@ print("")
 print("MLogReg")
 
 X = scale(X=X, scale=TRUE, center=TRUE);
-B = multiLogReg(X=X, Y=Y, verbose=TRUE, maxi = 10, maxii=10);
+B = multiLogReg(X=X, Y=Y, verbose=FALSE, maxi=3, maxii=2);
 
 [nn, P, acc] = multiLogRegPredict(X=X, B=B, Y=Y)
 

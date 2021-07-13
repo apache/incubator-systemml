@@ -89,6 +89,7 @@ public class DMLConfig
 	public static final String EAGER_CUDA_FREE      = "sysds.gpu.eager.cudaFree"; // boolean: whether to perform eager CUDA free on rmvar
 	public static final String GPU_EVICTION_POLICY  = "sysds.gpu.eviction.policy"; // string: can be lru, lfu, min_evict
 	public static final String LOCAL_SPARK_NUM_THREADS = "sysds.local.spark.number.threads";
+	public static final String CACHE                = "sysds.cache"; // true false
 	public static final String LINEAGECACHESPILL    = "sysds.lineage.cachespill"; // boolean: whether to spill cache entries to disk
 	public static final String COMPILERASSISTED_RW  = "sysds.lineage.compilerassisted"; // boolean: whether to apply compiler assisted rewrites
 	
@@ -141,6 +142,7 @@ public class DMLConfig
 		_defaultVals.put(CODEGEN_LITERALS,       "1" );
 		_defaultVals.put(NATIVE_BLAS,            "none" );
 		_defaultVals.put(NATIVE_BLAS_DIR,        "none" );
+		_defaultVals.put(CACHE,                  "true" );
 		_defaultVals.put(LINEAGECACHESPILL,      "true" );
 		_defaultVals.put(COMPILERASSISTED_RW,    "true" );
 		_defaultVals.put(PRINT_GPU_MEMORY_INFO,  "false" );

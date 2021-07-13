@@ -492,7 +492,8 @@ public class DMLScript
 		
 		//init caching (incl set active)
 		LocalFileUtils.createWorkingDirectory();
-		CacheableData.initCaching();
+		if(config.getBooleanValue(DMLConfig.CACHE))
+			CacheableData.initCaching();
 		
 		//reset statistics (required if multiple scripts executed in one JVM)
 		Statistics.resetNoOfExecutedJobs();

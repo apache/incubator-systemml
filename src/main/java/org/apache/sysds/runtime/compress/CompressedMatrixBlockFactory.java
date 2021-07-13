@@ -187,7 +187,8 @@ public class CompressedMatrixBlockFactory {
 		_stats.denseSize = MatrixBlock.estimateSizeInMemory(mb.getNumRows(), mb.getNumColumns(), 1.0);
 		_stats.originalSize = mb.getInMemorySize();
 
-		res = new CompressedMatrixBlock(mb); // copy metadata.
+		res = new CompressedMatrixBlock(mb); // copy metadata and allocate soft reference
+
 		classifyPhase();
 		if(coCodeColGroups == null)
 			return abortCompression();
@@ -198,13 +199,17 @@ public class CompressedMatrixBlockFactory {
 
 		if(res == null)
 			return abortCompression();
+		final long oldNNZ = mb.getNonZeros();
+		if(oldNNZ != -1 && oldNNZ != 0)
+			res.setNonZeros(oldNNZ);
+		else
+			res.recomputeNonZeros();
 
-		res.recomputeNonZeros();
 		return new ImmutablePair<>(res, _stats);
 	}
 
 	private void classifyPhase() {
-		CompressedSizeEstimator sizeEstimator = CompressedSizeEstimatorFactory.getSizeEstimator(mb, compSettings);
+		CompressedSizeEstimator sizeEstimator = CompressedSizeEstimatorFactory.getSizeEstimator(mb, compSettings, k);
 		CompressedSizeInfo sizeInfos = sizeEstimator.computeCompressedSizeInfos(k);
 		_stats.estimatedSizeCols = sizeInfos.memoryEstimate();
 		logPhase();
@@ -229,9 +234,9 @@ public class CompressedMatrixBlockFactory {
 	private void transposePhase() {
 		boolean sparse = mb.isInSparseFormat();
 		transposeHeuristics();
-		mb = compSettings.transposed ? LibMatrixReorg.transpose(mb,
-			new MatrixBlock(mb.getNumColumns(), mb.getNumRows(), sparse),
-			k) : new MatrixBlock(mb.getNumRows(), mb.getNumColumns(), sparse).copyShallow(mb);
+		if(compSettings.transposed)
+			mb = LibMatrixReorg.transpose(mb, new MatrixBlock(mb.getNumColumns(), mb.getNumRows(), sparse), k, true);
+
 		logPhase();
 	}
 
@@ -245,9 +250,11 @@ public class CompressedMatrixBlockFactory {
 				break;
 			default:
 				if(mb.isInSparseFormat()) {
+					// compSettings.transposed = true;
+					// compSettings.transposed = false;
 					boolean isAboveRowNumbers = mb.getNumRows() > 500000;
-					boolean isAboveThreadToColumnRatio = coCodeColGroups.getNumberColGroups() > mb.getNumColumns() / 2;
-					compSettings.transposed = isAboveRowNumbers || isAboveThreadToColumnRatio;
+					boolean isAboveThreadToColumnRatio = coCodeColGroups.getNumberColGroups() > mb.getNumColumns() / 4;
+					compSettings.transposed = isAboveRowNumbers && isAboveThreadToColumnRatio;
 				}
 				else
 					compSettings.transposed = false;
@@ -345,10 +352,11 @@ public class CompressedMatrixBlockFactory {
 			return;
 		}
 
-		mb.cleanupBlock(true, true);
-
 		_stats.setColGroupsCounts(res.getColGroups());
 
+		if(res.getNumRows() >= 1000000)
+			System.gc(); // forced garbage collect.
+	
 		logPhase();
 
 	}

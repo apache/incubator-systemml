@@ -59,6 +59,7 @@ import org.apache.sysds.runtime.instructions.spark.CpmmSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.CtableSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.CumulativeAggregateSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.CumulativeOffsetSPInstruction;
+import org.apache.sysds.runtime.instructions.spark.DeCompressionSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.DnnSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.IndexingSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.MapmmChainSPInstruction;
@@ -499,6 +500,9 @@ public class SPInstructionParser extends InstructionParser
 
 			case Compression:
 				return CompressionSPInstruction.parseInstruction(str);
+
+			case DeCompression:
+				return DeCompressionSPInstruction.parseInstruction(str);
 
 			case SpoofFused:
 				return SpoofSPInstruction.parseInstruction(str);

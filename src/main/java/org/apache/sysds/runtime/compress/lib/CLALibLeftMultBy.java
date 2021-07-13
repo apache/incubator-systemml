@@ -34,6 +34,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.compress.CompressedMatrixBlock;
 import org.apache.sysds.runtime.compress.colgroup.AColGroup;
+import org.apache.sysds.runtime.compress.colgroup.ColGroupDDC;
 import org.apache.sysds.runtime.compress.colgroup.ColGroupValue;
 import org.apache.sysds.runtime.compress.utils.LinearAlgebraUtils;
 import org.apache.sysds.runtime.functionobjects.Plus;
@@ -269,7 +270,7 @@ public class CLALibLeftMultBy {
 					}
 					else {
 
-						List<List<AColGroup>> split = split(colGroups, Math.max(k / 2 / that.getNumRows(), 1));
+						List<List<AColGroup>> split = split(colGroups, Math.max(k / that.getNumRows(), 1));
 						for(int blo = 0; blo < that.getNumRows(); blo += rowBlockSize) {
 							for(List<AColGroup> gr : split)
 								tasks.add(new LeftMatrixColGroupMultTaskNew(gr, that, ret, numColumns, blo,
@@ -383,20 +384,18 @@ public class CLALibLeftMultBy {
 			}
 		}
 		else {
-
 			List<ColGroupValue> v = new ArrayList<>();
 			int rowBlockSize = 1;
-			int colBlockSize = 4000;
-			int colGroupBlocking = 4;
 			List<MatrixBlock> preAgg = new ArrayList<>();
+			int colGroupBlocking = 16;
 			for(int j = 0; j < colGroupBlocking; j++) {
 				MatrixBlock m = new MatrixBlock(1, 1, false);
 				m.allocateDenseBlock();
 				preAgg.add(m);
-
 			}
+			
 			MatrixBlock tmpRes = new MatrixBlock(rowBlockSize, numColumns, false);
-
+			
 			for(int j = 0; j < colGroups.size(); j++) {
 				AColGroup a = colGroups.get(j);
 				if(a instanceof ColGroupValue) {
@@ -404,15 +403,20 @@ public class CLALibLeftMultBy {
 					v.add(av);
 				}
 				else
-					a.leftMultByMatrix(that, ret, rl, ru);
+				a.leftMultByMatrix(that, ret, rl, ru);
 			}
 			Collections.sort(v, Comparator.comparing(AColGroup::getNumValues).reversed());
 			// LOG.error(v);
 			for(int g = 0; g < v.size(); g += colGroupBlocking) {
 				final int gEnd = Math.min(g + colGroupBlocking, colGroups.size());
+				int ddcCount = 0;
 				for(int j = g; j < gEnd && j < v.size(); j++) {
-					preAgg.get(j % colGroupBlocking).reset(rowBlockSize, v.get(j).getNumValues(), false);
+					ColGroupValue cg = v.get(j);
+					preAgg.get(j % colGroupBlocking).reset(rowBlockSize, cg.getNumValues(), false);
+					if(cg instanceof ColGroupDDC)
+						ddcCount++;
 				}
+				int colBlockSize = ddcCount == colGroupBlocking ? 16000 : 128000;
 
 				for(int h = rl; h < ru; h += rowBlockSize) {
 					for(int i = 0; i < that.getNumColumns(); i += colBlockSize) {

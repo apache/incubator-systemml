@@ -1638,7 +1638,7 @@ Scheme | Definition
 -------- | -----------
 Disjoint_Contiguous | For each worker, use a right indexing operation X[beg:end,] to obtain contiguous, non-overlapping partitions of rows
 Disjoint_Round_Robin | For each worker, use a permutation multiply or simpler a removeEmpty such as removeEmpty(target=X, margin=rows, select=(seq(1,nrow(X))%%k)==id)
-Disjoint_Random | For each worker, use a permutation multiply P[beg:end,] %*% X, where P is constructed for example with P=table(seq(1,nrow(X),sample(nrow(X), nrow(X)))), i.e., sampling without replacement to ensure disjointness
+Disjoint_Random | For each worker, use a permutation multiply P[beg:end,] %*% X, where P is constructed for example with P=table(seq(1,nrow(X)),sample(nrow(X), nrow(X))), i.e., sampling without replacement to ensure disjointness
 Overlap_Reshuffle | Similar to the above, except to create a new permutation matrix for each worker and without the indexing on P
 
 ### Other Built-In Functions

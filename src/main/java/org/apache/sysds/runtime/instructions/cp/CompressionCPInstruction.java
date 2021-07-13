@@ -19,8 +19,12 @@
 
 package org.apache.sysds.runtime.instructions.cp;
 
+import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.hops.OptimizerUtils;
 import org.apache.sysds.runtime.compress.CompressedMatrixBlockFactory;
+import org.apache.sysds.runtime.compress.CompressionStatistics;
 import org.apache.sysds.runtime.compress.SingletonLookupHashMap;
 import org.apache.sysds.runtime.compress.workload.WTreeRoot;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
@@ -29,8 +33,10 @@ import org.apache.sysds.runtime.matrix.data.MatrixBlock;
 import org.apache.sysds.runtime.matrix.operators.Operator;
 
 public class CompressionCPInstruction extends ComputationCPInstruction {
+	private static final Log LOG = LogFactory.getLog(CompressionCPInstruction.class.getName());
 
 	private final int _singletonLookupID;
+
 
 	private CompressionCPInstruction(Operator op, CPOperand in, CPOperand out, String opcode, String istr,
 		int singletonLookupID) {
@@ -61,8 +67,11 @@ public class CompressionCPInstruction extends ComputationCPInstruction {
 
 		WTreeRoot root = (_singletonLookupID != 0) ? (WTreeRoot) m.get(_singletonLookupID) : null;
 		// Compress the matrix block
-		MatrixBlock out = CompressedMatrixBlockFactory.compress(in, OptimizerUtils.getConstrainedNumThreads(-1), root)
-			.getLeft();
+		Pair<MatrixBlock, CompressionStatistics> compResult = CompressedMatrixBlockFactory.compress(in, OptimizerUtils.getConstrainedNumThreads(-1), root);
+
+		LOG.error(compResult.getRight());
+		MatrixBlock out = compResult.getLeft();
+		LOG.error("Compressed Size: " + out.getInMemorySize());
 
 		m.removeKey(_singletonLookupID);
 		// Set output and release input
